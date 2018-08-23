@@ -51,8 +51,6 @@ class mDot {
         uint32_t RTC_ReadBackupRegister(uint32_t RTC_BKP_DR);
         void RTC_WriteBackupRegister(uint32_t RTC_BKP_DR, uint32_t Data);
 
-        void wakeup();
-
         void enterStopMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM);
         void enterStandbyMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM);
 
@@ -111,6 +109,7 @@ class mDot {
             MDOT_AGGREGATED_DUTY_CYCLE = -11,
             MDOT_MAX_PAYLOAD_EXCEEDED = -12,
             MDOT_LBT_CHANNEL_BUSY = -13,
+            MDOT_NOT_IDLE = -14,
             MDOT_ERROR = -1024,
         } mdot_ret_code;
 
@@ -147,15 +146,7 @@ class mDot {
             DR12,
             DR13,
             DR14,
-            DR15,
-            SF_12 = 16,
-            SF_11,
-            SF_10,
-            SF_9,
-            SF_8,
-            SF_7,
-            SF_7H,
-            SF_FSK
+            DR15
         };
 
         enum FrequencySubBands {
@@ -241,7 +232,7 @@ class mDot {
 
         typedef struct {
                 bool status;
-                int32_t dBm;
+                uint8_t dBm;
                 uint32_t gateways;
                 std::vector<uint8_t> payload;
         } link_check;
@@ -251,9 +242,6 @@ class mDot {
                 int16_t rssi;
                 int16_t snr;
         } ping_response;
-
-        static const uint8_t MaxLengths_915[];
-        static const uint8_t MaxLengths_868[];
 
         static std::string JoinModeStr(uint8_t mode);
         static std::string ModeStr(uint8_t mode);
@@ -274,6 +262,13 @@ class mDot {
          * @returns pointer to mDot object
          */
         static mDot* getInstance(lora::ChannelPlan* plan);
+
+        /**
+	 * Can only be used after a dot has 
+         * configured with a plan
+         * @returns pointer to mDot object
+         */
+        static mDot* getInstance();
 
         void setEvents(mDotEvent* events);
 
@@ -521,19 +516,32 @@ class mDot {
         void setListenBeforeTalkTime(uint32_t ms);
 
         /**
-         * Enable/disable public network mode
-         * JoinDelay will be set to (public: 5s, private: 1s) and
-         * RxDelay will be set to 1s both can be adjusted afterwards
-         * @param on should be true to enable public network mode
+         * Set public network mode
+         * 0:PRIVATE_MTS, 1:PUBLIC_LORAWAN, 2:PRIVATE_LORAWAN
+         * PRIVATE_MTS - Sync Word 0x12, US/AU Downlink frequencies per Frequency Sub Band
+         * PUBLIC_LORAWAN - Sync Word 0x34
+         * PRIVATE_LORAWAN - Sync Word 0x12
+         *
+         * The default Join Delay is 5 seconds
+         * The default Join Delay for PRIVATE_MTS was 1 second in the previous release
+         * The Join Delay must be changed independently of Public Network setting
+         *
+         * @see lora::NetworkType
          * @returns MDOT_OK if success
          */
-        int32_t setPublicNetwork(const bool& on);
+        int32_t setPublicNetwork(const uint8_t& val);
 
         /**
          * Get public network mode
-         * @returns true if public network mode is enabled
+         *
+         * The default Join Delay is 5 seconds
+         * The default Join Delay for PRIVATE_MTS was 1 second in the previous release
+         * The Join Delay must be changed independently of Public Network setting
+         *
+         * @see lora:NetworkType
+         * @returns 0:PRIVATE_MTS, 1:PUBLIC_LORAWAN, 2:PRIVATE_LORAWAN
          */
-        bool getPublicNetwork();
+        uint8_t getPublicNetwork();
 
         /**
          * Get the device ID
@@ -700,6 +708,19 @@ class mDot {
          * @returns eui application key (size 16)
          */
         const uint8_t* getAppKey();
+
+        /**
+         * Add a multicast session address and keys
+         * Downlink counter is set to 0
+         * Up to 3 MULTICAST_SESSIONS can be set
+         */
+        int32_t setMulticastSession(uint8_t index, uint32_t addr, const uint8_t* nsk, const uint8_t* dsk);
+
+        /**
+         * Set a multicast session counter
+         * Up to 3 MULTICAST_SESSIONS can be set
+         */
+        int32_t setMulticastDownlinkCounter(uint8_t index, uint32_t count);
 
         /**
          * Set join byte order
@@ -883,16 +904,24 @@ class mDot {
 
         /**
          * Get join delay in seconds
-         *  Public network defaults to 5 seconds
-         *  Private network defaults to 1 second
+         *  Defaults to 5 seconds
+         *  Must match join delay setting of the network server
+         *
+         * The default Join Delay is 5 seconds
+         * The default Join Delay for PRIVATE_MTS was 1 second in the previous release
+         *
          *  @returns number of seconds before join accept message is expected
          */
         uint8_t getJoinDelay();
 
         /**
          * Set join delay in seconds
-         *  Public network defaults to 5 seconds
-         *  Private network defaults to 1 second
+         *  Defaults to 5 seconds
+         *  Must match join delay setting of the network server
+         *
+         * The default Join Delay is 5 seconds
+         * The default Join Delay for PRIVATE_MTS was 1 second in the previous release
+         *
          *  @param delay number of seconds before join accept message is expected
          *  @return MDOT_OK if success
          */
@@ -999,7 +1028,7 @@ class mDot {
         /**
          * Set TX data rate
          * data rates affect maximum payload size
-         * @param dr SF_7 - SF_12|DR0-DR7 for Europe, SF_7 - SF_10 | DR0-DR4 for United States
+         * @param dr DR0-DR7 for Europe, DR0-DR4 for United States
          * @returns MDOT_OK if success
          */
         int32_t setTxDataRate(const uint8_t& dr);
@@ -1298,8 +1327,24 @@ class mDot {
          * For the XDOT
          *      in sleep mode, the device can be woken up on GPIO (0-3), UART1_RX, WAKE or by the RTC alarm
          *      in deepsleep mode, the device can only be woken up using the WKUP pin (PA0, WAKE) or by the RTC alarm
+         * @returns MDOT_OK on success
          */
-        void sleep(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM, const bool& deepsleep = true);
+        int32_t sleep(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM, const bool& deepsleep = true);
+
+        /**
+         * Set auto sleep mode
+         * Auto sleep mode will automatically put the MCU to sleep after tx and in between receive windows
+         * Note: The MCU will go into a stop mode sleep in between rx windows.  This means that
+         *       peripherals such as timers will not function during the sleep intervals.
+         * @param enable - Flag to enable auto sleep mode
+         */
+        void setAutoSleep(bool enable);
+
+        /**
+         * Get auto sleep mode
+         * @returns 0 if sleep mode is disabled, 1 if it is enabled
+         */
+        uint8_t getAutoSleep();
 
         /**
          * Set wake pin
@@ -1601,8 +1646,11 @@ class mDot {
         void closeRxWindow();
         void sendContinuous(bool enable=true);
         int32_t setDeviceId(const std::vector<uint8_t>& id);
+        int32_t setProtectedAppEUI(const std::vector<uint8_t>& appEUI);
+        int32_t setProtectedAppKey(const std::vector<uint8_t>& appKey);
         int32_t setDefaultFrequencyBand(const uint8_t& band);
         bool saveProtectedConfig();
+        // resets the radio/mac/link 
         void resetRadio();
         int32_t setRadioMode(const uint8_t& mode);
         std::map<uint8_t, uint8_t> dumpRegisters();
@@ -1629,8 +1677,35 @@ class mDot {
         void setWakeupCallback(T *object, void (T::*member)(void)) {
             _wakeup_callback.attach(object, member);
         }
+        
+        lora::ChannelPlan* getChannelPlan(void);  
 
+        uint32_t setRx2DataRate(uint8_t dr);
+        uint8_t getRx2DataRate();
+
+        void mcGroupKeys(uint8_t *mcKeyEncrypt, uint32_t addr, uint8_t groupId, uint32_t frame_count);  
     private:
+        typedef enum {
+            AUTO_SLEEP_EVT_CFG,
+            AUTO_SLEEP_EVT_TXDONE,
+            AUTO_SLEEP_EVT_RX1_TIMEOUT,
+            AUTO_SLEEP_EVT_CLEANUP
+        } AutoSleepEvent_t;
+
+        typedef enum {
+            USER_SLEEP,
+            AUTO_SLEEP
+        } SleepClient_t;
+
+        void sleep_ms(uint32_t interval,
+                      uint8_t wakeup_mode = RTC_ALARM,
+                      bool deepsleep = true,
+                      SleepClient_t sleep_client = USER_SLEEP);
+
+        void auto_sleep(AutoSleepEvent_t evt);
+
+        void wakeup(SleepClient_t sleep_client);
+
         mdot_stats _stats;
 
         FunctionPointer _wakeup_callback;

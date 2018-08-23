@@ -31,6 +31,11 @@ namespace lora {
     class MoteEvents: public MacEvents {
 
             /**
+             * Fired at start of TX
+             */
+            virtual void TxStart(void);
+
+            /**
              * Fired at end of TX
              * @param dr datarate used for TX
              */
@@ -60,7 +65,7 @@ namespace lora {
             virtual void JoinFailed(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
 
             /**
-             * Fired when non duplicate packet is received and MIC is valid
+             * Fired when packet is received and MIC is valid
              * @param port of packet
              * @param payload received bytes
              * @param size number of received bytes
@@ -69,8 +74,10 @@ namespace lora {
              * @param ctrl Downlink control field of packet
              * @param slot rx window packet was received
              * @param retries number of attempts before ack was received
+             * @param address of the end device
+             * @param dupRx set if this packet has already been received
              */
-            virtual void PacketRx(uint8_t port, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr, lora::DownlinkControl ctrl, uint8_t slot, uint8_t retries = 0);
+            virtual void PacketRx(uint8_t port, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr, lora::DownlinkControl ctrl, uint8_t slot, uint8_t retries = 0, uint32_t address = 0, bool dupRx=false);
 
             /**
              * Fired when radio has received a packet, packet is not validated
@@ -169,6 +176,7 @@ namespace lora {
              * @return LORA_OK
              */
             uint8_t SetChannelPlan(ChannelPlan* plan);
+
 
             Settings* GetSettings();
 

@@ -1,6 +1,7 @@
 #ifndef MDOT_EVENT_H
 #define MDOT_EVENT_H
 
+#include "mbed.h"
 #include "mDot.h"
 #include "MacEvents.h"
 #include "MTSLog.h"
@@ -38,6 +39,7 @@ typedef struct {
         LoRaMacEventInfoStatus Status;
         lora::DownlinkControl Ctrl;
         bool TxAckReceived;
+        bool DuplicateRx;
         uint8_t TxNbRetries;
         uint8_t TxDatarate;
         uint8_t RxPort;
@@ -65,7 +67,9 @@ class mDotEvent: public lora::MacEvents {
           PongRssi(0),
           PongSnr(0),
           AckReceived(false),
-          TxNbRetries(0)
+          DuplicateRx(false),
+          TxNbRetries(0),
+          _sleep_cb(NULL)
         {
             memset(&_flags, 0, sizeof(LoRaMacEventFlags));
             memset(&_info, 0, sizeof(LoRaMacEventInfo));
@@ -115,11 +119,20 @@ class mDotEvent: public lora::MacEvents {
             }
         }
 
+        virtual void TxStart() {
+            logDebug("mDotEvent - TxStart");
+
+            // Fire auto sleep cfg event if enabled
+            if (_sleep_cb)
+                _sleep_cb(mDot::AUTO_SLEEP_EVT_CFG);
+        }
+
         virtual void TxDone(uint8_t dr) {
             RxPayloadSize = 0;
             LinkCheckAnsReceived = false;
             PacketReceived = false;
             AckReceived = false;
+            DuplicateRx = false;
             PongReceived = false;
             TxNbRetries = 0;
 
@@ -131,6 +144,10 @@ class mDotEvent: public lora::MacEvents {
             _info.TxDatarate = dr;
             _info.Status = LORAMAC_EVENT_INFO_STATUS_OK;
             Notify();
+
+            // If configured, we can sleep until the rx window opens
+            if (_sleep_cb)
+                _sleep_cb(mDot::AUTO_SLEEP_EVT_TXDONE);
         }
 
         void Notify() {
@@ -152,6 +169,9 @@ class mDotEvent: public lora::MacEvents {
             _flags.Bits.JoinAccept = 1;
             _info.Status = LORAMAC_EVENT_INFO_STATUS_OK;
             Notify();
+
+            if (_sleep_cb)
+                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual void JoinFailed(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
@@ -161,6 +181,9 @@ class mDotEvent: public lora::MacEvents {
             _flags.Bits.JoinAccept = 1;
             _info.Status = LORAMAC_EVENT_INFO_STATUS_JOIN_FAIL;
             Notify();
+
+            if (_sleep_cb)
+                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual void MissedAck(uint8_t retries) {
@@ -169,8 +192,8 @@ class mDotEvent: public lora::MacEvents {
             _info.TxNbRetries = retries;
         }
 
-        virtual void PacketRx(uint8_t port, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr, lora::DownlinkControl ctrl, uint8_t slot, uint8_t retries = 0) {
-            logDebug("mDotEvent - PacketRx");
+        virtual void PacketRx(uint8_t port, uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr, lora::DownlinkControl ctrl, uint8_t slot, uint8_t retries, uint32_t address, bool dupRx) {
+            logDebug("mDotEvent - PacketRx ADDR: %08x", address);
             RxPort = port;
             PacketReceived = true;
 
@@ -180,6 +203,8 @@ class mDotEvent: public lora::MacEvents {
             if (ctrl.Bits.Ack) {
                 AckReceived = true;
             }
+
+            DuplicateRx = dupRx;
 
             if (mts::MTSLog::getLogLevel() == mts::MTSLog::TRACE_LEVEL) {
                 std::string packet = mts::Text::bin2hexString(RxPayload, size);
@@ -196,6 +221,7 @@ class mDotEvent: public lora::MacEvents {
             _info.RxRssi = rssi;
             _info.RxSnr = snr;
             _info.TxAckReceived = AckReceived;
+            _info.DuplicateRx = DuplicateRx;
             _info.TxNbRetries = retries;
             _info.Status = LORAMAC_EVENT_INFO_STATUS_OK;
             Notify();
@@ -203,6 +229,9 @@ class mDotEvent: public lora::MacEvents {
 
         virtual void RxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr, lora::DownlinkControl ctrl, uint8_t slot) {
             logDebug("mDotEvent - RxDone");
+
+            if (_sleep_cb)
+                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual void Pong(int16_t m_rssi, int8_t m_snr, int16_t s_rssi, int8_t s_snr) {
@@ -229,12 +258,20 @@ class mDotEvent: public lora::MacEvents {
         }
 
         virtual void RxTimeout(uint8_t slot) {
-            // logDebug("mDotEvent - RxTimeout");
+            logDebug("mDotEvent - RxTimeout on Slot %d", slot);
 
             _flags.Bits.Tx = 0;
             _flags.Bits.RxSlot = slot;
             _info.Status = LORAMAC_EVENT_INFO_STATUS_RX_TIMEOUT;
             Notify();
+
+            if (_sleep_cb) {
+                // If this is the first rx window we can sleep until the next one
+                if (slot == 1)
+                    _sleep_cb(mDot::AUTO_SLEEP_EVT_RX1_TIMEOUT);
+                else
+                    _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
+            }
         }
 
         virtual void RxError(uint8_t slot) {
@@ -246,10 +283,21 @@ class mDotEvent: public lora::MacEvents {
             _flags.Bits.RxSlot = slot;
             _info.Status = LORAMAC_EVENT_INFO_STATUS_RX_ERROR;
             Notify();
+
+            if (_sleep_cb)
+                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual uint8_t MeasureBattery(void) {
             return 255;
+        }
+
+        void AttachSleepCallback(Callback<void(mDot::AutoSleepEvent_t)> cb) {
+            _sleep_cb = cb;
+        }
+
+        void DetachSleepCallback() {
+            _sleep_cb = NULL;
         }
 
         bool LinkCheckAnsReceived;
@@ -266,6 +314,7 @@ class mDotEvent: public lora::MacEvents {
         int16_t PongSnr;
 
         bool AckReceived;
+        bool DuplicateRx;
         uint8_t TxNbRetries;
 
         LoRaMacEventFlags& Flags() {
@@ -276,6 +325,8 @@ class mDotEvent: public lora::MacEvents {
         }
 
     private:
+        /* Hook to inject a sleep method in between receive windows */
+        Callback<void(mDot::AutoSleepEvent_t)> _sleep_cb;
 
         LoRaMacEventFlags _flags;
         LoRaMacEventInfo _info;
