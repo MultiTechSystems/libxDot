@@ -1,3 +1,31 @@
+/**********************************************************************
+* COPYRIGHT 2015 MULTI-TECH SYSTEMS, INC.
+*
+* Redistribution and use in source and binary forms, with or without modification,
+* are permitted provided that the following conditions are met:
+*   1. Redistributions of source code must retain the above copyright notice,
+*      this list of conditions and the following disclaimer.
+*   2. Redistributions in binary form must reproduce the above copyright notice,
+*      this list of conditions and the following disclaimer in the documentation
+*      and/or other materials provided with the distribution.
+*   3. Neither the name of MULTI-TECH SYSTEMS, INC. nor the names of its contributors
+*      may be used to endorse or promote products derived from this software
+*      without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+******************************************************************************
+*/
+
 #ifndef MDOT_EVENT_H
 #define MDOT_EVENT_H
 
@@ -63,13 +91,15 @@ class mDotEvent: public lora::MacEvents {
           PacketReceived(false),
           RxPort(0),
           RxPayloadSize(0),
+          BeaconLocked(false),
           PongReceived(false),
           PongRssi(0),
           PongSnr(0),
+          ServerTimeReceived(false),
+          ServerTimeSeconds(0U),
           AckReceived(false),
           DuplicateRx(false),
-          TxNbRetries(0),
-          _sleep_cb(NULL)
+          TxNbRetries(0)
         {
             memset(&_flags, 0, sizeof(LoRaMacEventFlags));
             memset(&_info, 0, sizeof(LoRaMacEventInfo));
@@ -122,12 +152,12 @@ class mDotEvent: public lora::MacEvents {
         virtual void TxStart() {
             logDebug("mDotEvent - TxStart");
 
-            // Fire auto sleep cfg event if enabled
-            if (_sleep_cb)
-                _sleep_cb(mDot::AUTO_SLEEP_EVT_CFG);
         }
 
         virtual void TxDone(uint8_t dr) {
+            _timeSinceTx.reset();
+            _timeSinceTx.start();
+
             RxPayloadSize = 0;
             LinkCheckAnsReceived = false;
             PacketReceived = false;
@@ -145,9 +175,6 @@ class mDotEvent: public lora::MacEvents {
             _info.Status = LORAMAC_EVENT_INFO_STATUS_OK;
             Notify();
 
-            // If configured, we can sleep until the rx window opens
-            if (_sleep_cb)
-                _sleep_cb(mDot::AUTO_SLEEP_EVT_TXDONE);
         }
 
         void Notify() {
@@ -170,8 +197,6 @@ class mDotEvent: public lora::MacEvents {
             _info.Status = LORAMAC_EVENT_INFO_STATUS_OK;
             Notify();
 
-            if (_sleep_cb)
-                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual void JoinFailed(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
@@ -182,8 +207,6 @@ class mDotEvent: public lora::MacEvents {
             _info.Status = LORAMAC_EVENT_INFO_STATUS_JOIN_FAIL;
             Notify();
 
-            if (_sleep_cb)
-                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual void MissedAck(uint8_t retries) {
@@ -230,8 +253,17 @@ class mDotEvent: public lora::MacEvents {
         virtual void RxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr, lora::DownlinkControl ctrl, uint8_t slot) {
             logDebug("mDotEvent - RxDone");
 
-            if (_sleep_cb)
-                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
+        }
+
+        virtual void BeaconRx(const lora::BeaconData_t& beacon_data, int16_t rssi, int8_t snr) {
+            logDebug("mDotEvent - BeaconRx");
+            BeaconLocked = true;
+            BeaconData = beacon_data;
+        }
+
+        virtual void BeaconLost() {
+            logDebug("mDotEvent - BeaconLost");
+            BeaconLocked = false;
         }
 
         virtual void Pong(int16_t m_rssi, int8_t m_snr, int16_t s_rssi, int8_t s_snr) {
@@ -239,6 +271,17 @@ class mDotEvent: public lora::MacEvents {
             PongReceived = true;
             PongRssi = s_rssi;
             PongSnr = s_snr;
+        }
+
+        virtual void ServerTime(uint32_t seconds, uint8_t sub_seconds) {
+            logDebug("mDotEvent - ServerTime");
+            ServerTimeReceived = true;
+
+            uint64_t current_server_time_ms = static_cast<uint64_t>(seconds) * 1000 +
+                static_cast<uint16_t>(sub_seconds) * 4 + _timeSinceTx.read_ms();
+
+            ServerTimeSeconds = static_cast<uint32_t>(current_server_time_ms / 1000);
+            ServerTimeMillis = static_cast<uint16_t>(current_server_time_ms % 1000);
         }
 
         virtual void NetworkLinkCheck(int16_t m_rssi, int8_t m_snr, int8_t s_snr, uint8_t s_gateways) {
@@ -265,13 +308,6 @@ class mDotEvent: public lora::MacEvents {
             _info.Status = LORAMAC_EVENT_INFO_STATUS_RX_TIMEOUT;
             Notify();
 
-            if (_sleep_cb) {
-                // If this is the first rx window we can sleep until the next one
-                if (slot == 1)
-                    _sleep_cb(mDot::AUTO_SLEEP_EVT_RX1_TIMEOUT);
-                else
-                    _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
-            }
         }
 
         virtual void RxError(uint8_t slot) {
@@ -284,20 +320,10 @@ class mDotEvent: public lora::MacEvents {
             _info.Status = LORAMAC_EVENT_INFO_STATUS_RX_ERROR;
             Notify();
 
-            if (_sleep_cb)
-                _sleep_cb(mDot::AUTO_SLEEP_EVT_CLEANUP);
         }
 
         virtual uint8_t MeasureBattery(void) {
             return 255;
-        }
-
-        void AttachSleepCallback(Callback<void(mDot::AutoSleepEvent_t)> cb) {
-            _sleep_cb = cb;
-        }
-
-        void DetachSleepCallback() {
-            _sleep_cb = NULL;
         }
 
         bool LinkCheckAnsReceived;
@@ -309,9 +335,16 @@ class mDotEvent: public lora::MacEvents {
         uint8_t RxPayload[255];
         uint8_t RxPayloadSize;
 
+        bool BeaconLocked;
+        lora::BeaconData_t BeaconData;
+
         bool PongReceived;
         int16_t PongRssi;
         int16_t PongSnr;
+
+        bool ServerTimeReceived;
+        uint32_t ServerTimeSeconds;
+        uint16_t ServerTimeMillis;
 
         bool AckReceived;
         bool DuplicateRx;
@@ -325,11 +358,11 @@ class mDotEvent: public lora::MacEvents {
         }
 
     private:
-        /* Hook to inject a sleep method in between receive windows */
-        Callback<void(mDot::AutoSleepEvent_t)> _sleep_cb;
 
         LoRaMacEventFlags _flags;
         LoRaMacEventInfo _info;
+
+        Timer _timeSinceTx;
 
 //
 //        /*!

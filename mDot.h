@@ -1,4 +1,30 @@
-// TODO: add license header
+/**********************************************************************
+* COPYRIGHT 2015 MULTI-TECH SYSTEMS, INC.
+*
+* Redistribution and use in source and binary forms, with or without modification,
+* are permitted provided that the following conditions are met:
+*   1. Redistributions of source code must retain the above copyright notice,
+*      this list of conditions and the following disclaimer.
+*   2. Redistributions in binary form must reproduce the above copyright notice,
+*      this list of conditions and the following disclaimer in the documentation
+*      and/or other materials provided with the distribution.
+*   3. Neither the name of MULTI-TECH SYSTEMS, INC. nor the names of its contributors
+*      may be used to endorse or promote products derived from this software
+*      without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+******************************************************************************
+*/
 
 #ifndef MDOT_H
 #define MDOT_H
@@ -35,9 +61,14 @@ class mDot {
         void waitForPacket();
         void waitForLinkCheck();
 
+
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         void setActivityLedState(const uint8_t& state);
+
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         uint8_t getActivityLedState();
 
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         void blinkActivityLed(void) {
             if (_activity_led) {
                 int val = _activity_led->read();
@@ -51,6 +82,9 @@ class mDot {
         uint32_t RTC_ReadBackupRegister(uint32_t RTC_BKP_DR);
         void RTC_WriteBackupRegister(uint32_t RTC_BKP_DR, uint32_t Data);
 
+        void RTC_DisableWakeupTimer();
+        void RTC_EnableWakeupTimer();
+
         void enterStopMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM);
         void enterStandbyMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM);
 
@@ -63,12 +97,12 @@ class mDot {
 
         std::string _last_error;
         static const uint32_t _baud_rates[];
-        uint8_t _activity_led_state;
+        uint8_t _activity_led_state; //deprecated will be removed
         Ticker _tick;
-        DigitalOut* _activity_led;
-        bool _activity_led_enable;
-        PinName _activity_led_pin;
-        bool _activity_led_external;
+        DigitalOut* _activity_led; //deprecated will be removed
+        bool _activity_led_enable; //deprecated will be removed
+        PinName _activity_led_pin;  //deprecated will be removed
+        bool _activity_led_external; //deprecated will be removed
         uint8_t _linkFailCount;
         uint8_t _class;
         InterruptIn* _wakeup;
@@ -127,7 +161,8 @@ class mDot {
 
         enum RX_Output {
             HEXADECIMAL,
-            BINARY
+            BINARY,
+            EXTENDED
         };
 
         enum DataRates {
@@ -159,11 +194,6 @@ class mDot {
             FSB_6,
             FSB_7,
             FSB_8
-        };
-
-        enum JoinByteOrder {
-            LSB,
-            MSB
         };
 
         enum wakeup_mode {
@@ -264,7 +294,7 @@ class mDot {
         static mDot* getInstance(lora::ChannelPlan* plan);
 
         /**
-	 * Can only be used after a dot has 
+	 * Can only be used after a dot has
          * configured with a plan
          * @returns pointer to mDot object
          */
@@ -328,41 +358,29 @@ class mDot {
          */
         void seedRandom(uint32_t seed);
 
+        /**
+         * @returns true if MAC command answers are ready to be sent
+         */
+        bool hasMacCommands();
+
 
         uint8_t setChannelPlan(lora::ChannelPlan* plan);
 
         lora::Settings* getSettings();
 
-        /**
-         * Enable or disable the activity LED.
-         * @param enable true to enable the LED, false to disable
-         */
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         void setActivityLedEnable(const bool& enable);
 
-        /**
-         * Find out if the activity LED is enabled
-         * @returns true if activity LED is enabled, false if disabled
-         */
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         bool getActivityLedEnable();
 
-        /**
-         * Use a different pin for the activity LED.
-         * The default is XBEE_RSSI.
-         * @param pin the new pin to use
-         */
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         void setActivityLedPin(const PinName& pin);
 
-        /**
-         * Use an external DigitalOut object for the activity LED.
-         * The pointer must stay valid!
-         * @param pin the DigitalOut object to use
-         */
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         void setActivityLedPin(DigitalOut* pin);
 
-        /**
-         * Find out what pin the activity LED is on
-         * @returns the pin the activity LED is using
-         */
+        MBED_DEPRECATED("Will be removed in dotlib 3.3.0")
         PinName getActivityLedPin();
 
         /**
@@ -723,18 +741,6 @@ class mDot {
         int32_t setMulticastDownlinkCounter(uint8_t index, uint32_t count);
 
         /**
-         * Set join byte order
-         * @param order 0:LSB 1:MSB
-         */
-        uint32_t setJoinByteOrder(uint8_t order);
-
-        /**
-         * Get join byte order
-         * @returns byte order to use in joins 0:LSB 1:MSB
-         */
-        uint8_t getJoinByteOrder();
-
-        /**
          * Attempt to join network
          * each attempt will be made with a random datarate up to the configured datarate
          * JoinRequest backoff between tries is enforced to 1% for 1st hour, 0.1% for 1-10 hours and 0.01% after 10 hours
@@ -901,6 +907,12 @@ class mDot {
          * @returns time (ms) until a channel is free to use for transmitting
          */
         uint32_t getNextTxMs();
+
+        /**
+         * Get available bytes for payload
+         * @returns bytes
+         */
+        uint8_t getNextTxMaxSize();
 
         /**
          * Get join delay in seconds
@@ -1077,6 +1089,7 @@ class mDot {
          * @returns spreading factor and bandwidth
          */
         std::string getDataRateDetails(uint8_t rate);
+        MBED_DEPRECATED("Will be removed in 3.3.0")
         std::string getDateRateDetails(uint8_t rate);
 
 
@@ -1194,6 +1207,21 @@ class mDot {
         uint8_t getMinTxPower();
 
         /**
+         * Set ping slot periodicity
+         * Specify the the number of ping slots in a given beacon interval
+         * Note: Must switch back to class A for the change to take effect
+         * @param exp - number_of_pings = 2^(7 - exp) where 0 <= exp <= 7
+         * @returns MDOT_OK if success
+         */
+        uint32_t setPingPeriodicity(uint8_t exp);
+
+        /**
+         * Get ping slot periodicity
+         * @returns exp = 7 - log2(number_of_pings)
+         */
+        uint8_t getPingPeriodicity();
+
+        /**
          *
          * get/set adaptive data rate
          * configure data rates and power levels based on signal to noise of packets received at gateway
@@ -1204,17 +1232,28 @@ class mDot {
         bool getAdr();
 
         /**
-         * Set forward error correction bytes
-         * @param bytes 1 - 4 bytes
-         * @returns MDOT_OK if success
+         * Set the ADR ACK Limit
+         * @param limit - ADR ACK limit
          */
-        int32_t setFec(const uint8_t& bytes);
+        void setAdrAckLimit(uint16_t limit);
 
         /**
-         * Get forward error correction bytes
-         * @returns bytes (1 - 4)
+         * Get the ADR ACK Limit
+         * @returns ADR ACK limit
          */
-        uint8_t getFec();
+        uint16_t getAdrAckLimit();
+
+        /**
+         * Set the ADR ACK Delay
+         * @param delay - ADR ACK delay
+         */
+        void setAdrAckDelay(uint16_t delay);
+
+        /**
+         * Get the ADR ACK Delay
+         * @returns ADR ACK delay
+         */
+        uint16_t getAdrAckDelay();
 
         /**
          * Enable/disable CRC checking of packets
@@ -1404,6 +1443,26 @@ class mDot {
          */
         int8_t getLbtThreshold();
 
+        /**
+         * Get Radio Frequency Offset
+         * Used for fine calibration of radio frequencies
+         * @returns frequency offset in MHz
+         */
+        int32_t getFrequencyOffset();
+        /**
+         * Get Radio Frequency Offset
+         * Used for fine calibration of radio frequencies
+         * @param offset frequency offset in MHz
+         */
+        void setFrequencyOffset(int32_t offset);
+
+        /**
+         * Get GPS time from network server
+         * Sends a DeviceTimeReq command to the network server
+         * @returns time since GPS epoch, 0 on failure
+         */
+        uint64_t getGPSTime();
+
 #if defined(TARGET_MTS_MDOT_F411RE)
         ///////////////////////////////////////////////////////////////////
         // Filesystem (Non Volatile Memory) Operation Functions for mDot //
@@ -1481,11 +1540,15 @@ class mDot {
         // file - name of file
         // returns true if successful
         bool moveUserFileToFirmwareUpgrade(const char* file);
+
+        // Return total size of all files saved in FLASH
+        // Does not include SPIFFS overhead
+        uint32_t getUsedSpace();
 #else
         ///////////////////////////////////////////////////////////////
         // EEPROM (Non Volatile Memory) Operation Functions for xDot //
         ///////////////////////////////////////////////////////////////
-        
+
         // Write to EEPROM
         // addr - address to write to (0 - 0x17FF)
         // data - data to write
@@ -1557,8 +1620,6 @@ class mDot {
         uint8_t getRxDataRate();
 
         // get/set TX/RX frequency
-        // if frequency band == FB_868 (Europe), must be between 863000000 - 870000000
-        // if frequency band == FB_915 (United States), must be between 902000000-928000000
         // if set to 0, device will hop frequencies
         // set function returns MDOT_OK if success
         int32_t setTxFrequency(const uint32_t& freq);
@@ -1566,16 +1627,8 @@ class mDot {
         int32_t setRxFrequency(const uint32_t& freq);
         uint32_t getRxFrequency();
 
-        // get/set TX/RX inverted
-        // true == signal is inverted
-        // set function returns MDOT_OK if success
-        int32_t setTxInverted(const bool& on);
-        bool getTxInverted();
-        int32_t setRxInverted(const bool& on);
-        bool getRxInverted();
-
         // get/set RX output mode
-        // valid options are HEXADECIMAL and BINARY
+        // valid options are HEXADECIMAL, BINARY, and EXTENDED
         // set function returns MDOT_OK if success
         int32_t setRxOutput(const uint8_t& mode);
         uint8_t getRxOutput();
@@ -1644,32 +1697,17 @@ class mDot {
 
         void openRxWindow(uint32_t timeout, uint8_t bandwidth = 0);
         void closeRxWindow();
-        void sendContinuous(bool enable=true);
+        void sendContinuous(bool enable=true, uint32_t timeout=0, uint32_t frequency=0, int8_t txpower=-1);
         int32_t setDeviceId(const std::vector<uint8_t>& id);
         int32_t setProtectedAppEUI(const std::vector<uint8_t>& appEUI);
         int32_t setProtectedAppKey(const std::vector<uint8_t>& appKey);
         int32_t setDefaultFrequencyBand(const uint8_t& band);
         bool saveProtectedConfig();
-        // resets the radio/mac/link 
+        // resets the radio/mac/link
         void resetRadio();
         int32_t setRadioMode(const uint8_t& mode);
         std::map<uint8_t, uint8_t> dumpRegisters();
         void eraseFlash();
-
-        // deprecated - use setWakeInterval
-        int32_t setSerialWakeInterval(const uint32_t& interval);
-        // deprecated - use getWakeInterval
-        uint32_t getSerialWakeInterval();
-
-        // deprecated - use setWakeDelay
-        int32_t setSerialWakeDelay(const uint32_t& delay);
-        // deprecated - use setWakeDelay
-        uint32_t getSerialWakeDelay();
-
-        // deprecated - use setWakeTimeout
-        int32_t setSerialReceiveTimeout(const uint16_t& timeout);
-        // deprecated - use getWakeTimeout
-        uint16_t getSerialReceiveTimeout();
 
         void setWakeupCallback(void (*function)(void));
 
@@ -1677,34 +1715,21 @@ class mDot {
         void setWakeupCallback(T *object, void (T::*member)(void)) {
             _wakeup_callback.attach(object, member);
         }
-        
-        lora::ChannelPlan* getChannelPlan(void);  
+
+        lora::ChannelPlan* getChannelPlan(void);
 
         uint32_t setRx2DataRate(uint8_t dr);
         uint8_t getRx2DataRate();
 
-        void mcGroupKeys(uint8_t *mcKeyEncrypt, uint32_t addr, uint8_t groupId, uint32_t frame_count);  
+        void mcGroupKeys(uint8_t *mcKeyEncrypt, uint32_t addr, uint8_t groupId, uint32_t frame_count);
     private:
-        typedef enum {
-            AUTO_SLEEP_EVT_CFG,
-            AUTO_SLEEP_EVT_TXDONE,
-            AUTO_SLEEP_EVT_RX1_TIMEOUT,
-            AUTO_SLEEP_EVT_CLEANUP
-        } AutoSleepEvent_t;
-
-        typedef enum {
-            USER_SLEEP,
-            AUTO_SLEEP
-        } SleepClient_t;
 
         void sleep_ms(uint32_t interval,
                       uint8_t wakeup_mode = RTC_ALARM,
-                      bool deepsleep = true,
-                      SleepClient_t sleep_client = USER_SLEEP);
+                      bool deepsleep = true);
 
-        void auto_sleep(AutoSleepEvent_t evt);
 
-        void wakeup(SleepClient_t sleep_client);
+        void wakeup();
 
         mdot_stats _stats;
 

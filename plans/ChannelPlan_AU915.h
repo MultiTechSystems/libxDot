@@ -23,6 +23,32 @@
 
 namespace lora {
 
+    const uint8_t AU915_125K_NUM_CHANS = 64;                    //!< Number of 125k channels in AU915 channel plan
+    const uint8_t AU915_500K_NUM_CHANS = 8;                     //!< Number of 500k channels in AU915 channel plan
+
+    const uint32_t AU915_125K_FREQ_BASE = 915200000;            //!< Frequency base for 125k AU915 uplink channels
+    const uint32_t AU915_125K_FREQ_STEP = 200000;               //!< Frequency step for 125k AU915 uplink channels
+
+    const uint32_t AU915_500K_FREQ_BASE = 915900000;            //!< Frequency base for 500k AU915 uplink channels
+    const uint32_t AU915_500K_FREQ_STEP = 1600000;              //!< Frequency step for 500k AU915 uplink channels
+
+    const uint32_t AU915_500K_DBASE = 923300000;                //!< Frequency base for 500k AU915 downlink channels
+    const uint32_t AU915_500K_DSTEP = 600000;                   //!< Frequency step for 500k AU915 downlink channels
+
+    const uint32_t AU915_FREQ_MIN = 915000000;
+    const uint32_t AU915_FREQ_MAX = 928000000;
+
+    const uint8_t AU915_MIN_DATARATE = (uint8_t) DR_0;          //!< Minimum transmit datarate for AU915
+    const uint8_t AU915_MAX_DATARATE = (uint8_t) DR_6;          //!< Maximum transmit datarate for AU915
+
+    const uint8_t AU915_MIN_DATARATE_OFFSET = (uint8_t) 0;      //!< Minimum transmit datarate for AU915
+    const uint8_t AU915_MAX_DATARATE_OFFSET = (uint8_t) 5;      //!< Maximum transmit datarate for AU915
+
+    const uint8_t  AU915_BEACON_DR = DR_8;                      //!< Default beacon datarate
+    const uint32_t AU915_BEACON_FREQ_BASE = 923300000U;         //!< Base beacon broadcast frequency
+    const uint32_t AU915_BEACON_FREQ_STEP = 600000U;            //!< Step size for beacon frequencies
+    const uint8_t  AU915_BEACON_CHANNELS = 8U;                  //!< Number of beacon channels
+
     class ChannelPlan_AU915 : public lora::ChannelPlan {
         public:
 
@@ -129,9 +155,14 @@ namespace lora {
              * Set the SxRadio rx config provided window
              * @param window to be opened
              * @param continuous keep window open
+             * @param wnd_growth factor to increase the rx window by
+             * @param pad_ms time in milliseconds to add to computed window size
              * @return LORA_OK
              */
-            virtual uint8_t SetRxConfig(uint8_t window, bool continuous);
+            virtual uint8_t SetRxConfig(uint8_t window,
+                                        bool continuous,
+                                        uint16_t wnd_growth,
+                                        uint16_t pad_ms);
 
             /**
              * Set frequency sub band if supported by plan
@@ -244,17 +275,60 @@ namespace lora {
              */
             virtual void EnableDefaultChannels();
 
+            /**
+             * Called when MAC layer doesn't know about a command.
+             * Use to add custom or new mac command handling
+             * @return LORA_OK
+             */
+            virtual uint8_t HandleMacCommand(uint8_t* payload, uint8_t& index);
+
+            /**
+             * Get max payload size for current datarate
+             * @return size in bytes
+             */
+            virtual uint8_t GetMaxPayloadSize();
+
             virtual uint8_t GetMinDatarate();
 
             virtual uint8_t GetMaxDatarate();
+
+            /**
+             * Check if this packet is a beacon and if so extract parameters needed
+             * @param payload of potential beacon
+             * @param size of the packet
+             * @param [out] data extracted from the beacon if this packet was indeed a beacon
+             * @return true if this packet is beacon, false if not
+             */
+            virtual bool DecodeBeacon(const uint8_t* payload,
+                                      size_t size,
+                                      BeaconData_t& data);
+
+            /**
+             * Update class B beacon and ping slot settings if frequency hopping enabled
+             * @param time received in the last beacon
+             * @param period of the beacon
+             * @param devAddr of this end device
+             */
+            virtual void FrequencyHop(uint32_t time, uint32_t period, uint32_t devAddr);
 
         protected:
 
             static const uint8_t AU915_TX_POWERS[11];                   //!< List of available tx powers
             static const uint8_t AU915_RADIO_POWERS[21];                //!< List of calibrated tx powers
             static const uint8_t AU915_MAX_PAYLOAD_SIZE[];              //!< List of max payload sizes for each datarate
+            static const uint8_t AU915_MAX_PAYLOAD_SIZE_400[];          //!< List of max payload sizes for each datarate
             static const uint8_t AU915_MAX_PAYLOAD_SIZE_REPEATER[];     //!< List of repeater compatible max payload sizes for each datarate
+            static const uint8_t AU915_MAX_PAYLOAD_SIZE_REPEATER_400[]; //!< List of repeater compatible max payload sizes for each datarate
+            static const uint8_t MAX_ERP_VALUES[];                      //!< Lookup table for Max EIRP (dBm) codes
 
+            typedef struct __attribute__((packed)) {
+                uint8_t RFU1[3];
+                uint8_t Time[4];
+                uint8_t CRC1[2];
+                uint8_t GwSpecific[7];
+                uint8_t RFU2[1];
+                uint8_t CRC2[2];
+            } BCNPayload;
     };
 }
 

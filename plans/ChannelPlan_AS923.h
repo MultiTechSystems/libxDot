@@ -1,9 +1,29 @@
-/**   __  ___     ____  _    ______        __     ____         __                  ____
- *   /  |/  /_ __/ / /_(_)__/_  __/__ ____/ /    / __/_ _____ / /____ __ _  ___   /  _/__  ____
- *  / /|_/ / // / / __/ /___// / / -_) __/ _ \  _\ \/ // (_-</ __/ -_)  ' \(_-<  _/ // _ \/ __/ __
- * /_/  /_/\_,_/_/\__/_/    /_/  \__/\__/_//_/ /___/\_, /___/\__/\__/_/_/_/___/ /___/_//_/\__/ /_/
- * Copyright (C) 2015 by Multi-Tech Systems        /___/
- *
+/**********************************************************************
+* COPYRIGHT 2015 MULTI-TECH SYSTEMS, INC.
+*
+* Redistribution and use in source and binary forms, with or without modification,
+* are permitted provided that the following conditions are met:
+*   1. Redistributions of source code must retain the above copyright notice,
+*      this list of conditions and the following disclaimer.
+*   2. Redistributions in binary form must reproduce the above copyright notice,
+*      this list of conditions and the following disclaimer in the documentation
+*      and/or other materials provided with the distribution.
+*   3. Neither the name of MULTI-TECH SYSTEMS, INC. nor the names of its contributors
+*      may be used to endorse or promote products derived from this software
+*      without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+* AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*
+******************************************************************************
  *
  * @author Jason Reiss
  * @date   10-31-2015
@@ -22,6 +42,14 @@
 #include "ChannelPlan.h"
 
 namespace lora {
+
+    const uint8_t  AS923_125K_NUM_CHANS = 16;        //!< Number of 125k channels in AS923 channel plan
+    const uint8_t  AS923_DEFAULT_NUM_CHANS = 2;      //!< Number of default channels in AS923 channel plan
+    const uint32_t AS923_125K_FREQ_BASE = 923200000; //!< Frequency base for 125k AS923 uplink channels
+    const uint32_t AS923_125K_FREQ_STEP = 200000;    //!< Frequency step for 125k AS923 uplink channels
+    const uint32_t AS923_RX2_FREQ = 923200000;       //!< Frequency default for second rx window in AS923
+    const uint8_t  AS923_BEACON_DR = DR_3;           //!< Default beacon datarate
+    const uint32_t AS923_BEACON_FREQ = 923400000U;   //!< Default beacon broadcast frequency
 
     class ChannelPlan_AS923: public lora::ChannelPlan {
         public:
@@ -95,9 +123,14 @@ namespace lora {
              * Set the SxRadio rx config provided window
              * @param window to be opened
              * @param continuous keep window open
+             * @param wnd_growth factor to increase the rx window by
+             * @param pad_ms time in milliseconds to add to computed window size
              * @return LORA_OK
              */
-            virtual uint8_t SetRxConfig(uint8_t window, bool continuous);
+            virtual uint8_t SetRxConfig(uint8_t window,
+                                        bool continuous,
+                                        uint16_t wnd_growth,
+                                        uint16_t pad_ms);
 
             /**
              * Set frequency sub band if supported by plan
@@ -230,14 +263,36 @@ namespace lora {
              */
             virtual void DecrementDatarate();
 
+            /**
+             * Check if this packet is a beacon and if so extract parameters needed
+             * @param payload of potential beacon
+             * @param size of the packet
+             * @param [out] data extracted from the beacon if this packet was indeed a beacon
+             * @return true if this packet is beacon, false if not
+             */
+            virtual bool DecodeBeacon(const uint8_t* payload,
+                                      size_t size,
+                                      BeaconData_t& data);
+
+
+            virtual uint8_t GetMinDatarate();
+
         protected:
 
             static const uint8_t AS923_TX_POWERS[8];                    //!< List of available tx powers
-            static const uint8_t AS923_RADIO_POWERS[21];                 //!< List of calibrated tx powers
+            static const uint8_t AS923_RADIO_POWERS[21];                //!< List of calibrated tx powers
             static const uint8_t AS923_MAX_PAYLOAD_SIZE[];              //!< List of max payload sizes for each datarate
-            static const uint8_t AS923_MAX_PAYLOAD_SIZE_400[];              //!< List of max payload sizes for each datarate
+            static const uint8_t AS923_MAX_PAYLOAD_SIZE_400[];          //!< List of max payload sizes for each datarate
             static const uint8_t AS923_MAX_PAYLOAD_SIZE_REPEATER[];     //!< List of repeater compatible max payload sizes for each datarate
-            static const uint8_t AS923_MAX_PAYLOAD_SIZE_REPEATER_400[];     //!< List of repeater compatible max payload sizes for each datarate
+            static const uint8_t AS923_MAX_PAYLOAD_SIZE_REPEATER_400[]; //!< List of repeater compatible max payload sizes for each datarate
+            static const uint8_t MAX_ERP_VALUES[];                      //!< Lookup table for Max EIRP (dBm) codes
+            typedef struct __attribute__((packed)) {
+                uint8_t RFU[2];
+                uint8_t Time[4];
+                uint8_t CRC1[2];
+                uint8_t GwSpecific[7];
+                uint8_t CRC2[2];
+            } BCNPayload;
     };
 }
 
