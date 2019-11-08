@@ -343,14 +343,16 @@ namespace lora {
             uint8_t Class;              //!< Operating class of device
             uint8_t EUI[8];             //!< Network ID or AppEUI
             uint8_t Key[16];            //!< Network Key or AppKey
+            uint8_t GenAppKey[16];      //!< Generic App Key, will be AppKey for LW 1.1.x
+            uint8_t McKEKey[16];        //!< Multicast Key Encryption Key
             uint8_t JoinDelay;          //!< Number of seconds to wait before 1st RX Window
             uint8_t RxDelay;            //!< Number of seconds to wait before 1st RX Window
             uint8_t FrequencySubBand;   //!< FrequencySubBand used for US915 hybrid operation 0:72 channels, 1:1-8 channels ...
             uint8_t AckAttempts;        //!< Number of attempts to send packet and receive an ACK from server
             uint8_t Retries;            //!< Number of times to resend a packet without receiving an ACK, redundancy
             uint8_t ADREnabled;         //!< Enable adaptive datarate
-            uint16_t AdrAckLimit;       //!< Number of uplinks without a downlink to allow before setting ADRACKReq
-            uint16_t AdrAckDelay;       //!< Number of downlinks to expect ADR ACK Response within
+            uint8_t AdrAckLimit;       //!< Number of uplinks without a downlink to allow before setting ADRACKReq
+            uint8_t AdrAckDelay;       //!< Number of downlinks to expect ADR ACK Response within
             uint8_t CADEnabled;         //!< Enable listen before talk/channel activity detection
             uint8_t RepeaterMode;       //!< Limit payloads to repeater compatible sizes
             uint8_t TxPower;            //!< Default radio output power in dBm

@@ -77,7 +77,7 @@ namespace lora {
              * ChannelPlan destructor
              */
             virtual ~ChannelPlan();
-            
+
             /**
              * Checks that at least one channel exist for the data rate
              */
@@ -565,7 +565,7 @@ namespace lora {
             virtual void DefaultLBT();
 
             virtual bool ListenBeforeTalk();
-        
+
             /**
              * use to clear downlink channels on join
              */
@@ -595,6 +595,11 @@ namespace lora {
              * Get default number of channels for a plan
              */
             virtual uint8_t GetNumDefaultChans();
+
+            /*
+             * Search enabled channels for lowest available datarate
+             */
+            virtual uint8_t GetMinEnabledDatarate();
         protected:
 
             SxRadio* GetRadio();                //!< Get pointer to the SxRadio object or assert if it is null
@@ -639,7 +644,7 @@ namespace lora {
             uint8_t _numChans125k;              //!< Number of 125K  channels in plan
             uint8_t _numChans500k;              //!< Number of 500K channels in plan
             uint8_t _numDefaultChans;           //!< Number of default channels in plan
-            
+
             uint16_t _LBT_TimeUs;               //!< Sample time in us for LBT
             int8_t _LBT_Threshold;              //!< Threshold in dBm for LBT
 

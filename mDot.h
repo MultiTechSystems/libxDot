@@ -1080,18 +1080,17 @@ class mDot {
          *
          * AU915 Datarates
          * ---------------
-         * DR0 - SF10BW125
-         * DR1 - SF9BW125
-         * DR2 - SF8BW125
-         * DR3 - SF7BW125
-         * DR4 - SF8BW500
+         * DR0 - SF12BW125
+         * DR1 - SF11BW125
+         * DR2 - SF10BW125
+         * DR3 - SF9BW125
+         * DR4 - SF8BW125
+         * DR5 - SF7BW125
+         * DR6 - SF8BW500
          *
          * @returns spreading factor and bandwidth
          */
         std::string getDataRateDetails(uint8_t rate);
-        MBED_DEPRECATED("Will be removed in 3.3.0")
-        std::string getDateRateDetails(uint8_t rate);
-
 
         /**
          * Set TX power output of radio before antenna gain, default: 14 dBm
@@ -1234,26 +1233,28 @@ class mDot {
         /**
          * Set the ADR ACK Limit
          * @param limit - ADR ACK limit
+         * @returns MDOT_OK if success
          */
-        void setAdrAckLimit(uint16_t limit);
+        int32_t setAdrAckLimit(uint8_t limit);
 
         /**
          * Get the ADR ACK Limit
          * @returns ADR ACK limit
          */
-        uint16_t getAdrAckLimit();
+        uint8_t getAdrAckLimit();
 
         /**
          * Set the ADR ACK Delay
          * @param delay - ADR ACK delay
+         * @returns MDOT_OK if success
          */
-        void setAdrAckDelay(uint16_t delay);
+        int32_t setAdrAckDelay(uint8_t delay);
 
         /**
          * Get the ADR ACK Delay
          * @returns ADR ACK delay
          */
-        uint16_t getAdrAckDelay();
+        uint8_t getAdrAckDelay();
 
         /**
          * Enable/disable CRC checking of packets
