@@ -1,3 +1,12 @@
+# Release 3.2.5
+
+## Bug Fixes
+* Restore channel mask in AU/US with AT+FSB=0
+* Wait for non-zero RSSI during LBT channel activity test
+* ADR back-off to DR0
+* ADR back-off calculate min-DR from enabled channels
+
+
 # Release 3.2.1
 
 ## Changes
