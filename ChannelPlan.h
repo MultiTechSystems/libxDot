@@ -62,6 +62,10 @@ namespace lora {
                 KR920 = DYNAMIC | 0x03,
                 AS923_JAPAN = DYNAMIC | 0x04,
                 RU864 = DYNAMIC | 0x05,
+                AS923_2 = DYNAMIC | 0x06,
+                AS923_3 = DYNAMIC | 0x07,
+                AS923_JAPAN1 = DYNAMIC | 0x08,
+                AS923_JAPAN2 = DYNAMIC | 0x09,
 
                 NONE = 0xFF,
             };
@@ -663,7 +667,7 @@ namespace lora {
             void OnTxDutyCycleEventBottom();                    //!< Callback for duty cycle event
 
             static const uint8_t* TX_POWERS;                    //!< List of available tx powers
-            static const uint8_t* RADIO_POWERS;                    //!< List of available tx powers
+            static const uint8_t RADIO_POWERS[];                    //!< List of available tx powers
             static const uint8_t* MAX_PAYLOAD_SIZE;             //!< List of max payload sizes for each datarate
             static const uint8_t* MAX_PAYLOAD_SIZE_REPEATER;    //!< List of repeater compatible max payload sizes for each datarate
 

@@ -34,6 +34,7 @@
 #include "MacEvents.h"
 #include "MTSLog.h"
 #include "MTSText.h"
+#include <chrono>
 
 typedef union {
         uint8_t Value;
@@ -215,7 +216,7 @@ class mDotEvent: public lora::MacEvents {
             _info.TxNbRetries = retries;
         }
 
-        virtual void PacketRx(uint8_t port, uint8_t *payload, uint16_t size, int16_t rssi, int16_t snr, lora::DownlinkControl ctrl, uint8_t slot, uint8_t retries, uint32_t address, bool dupRx) {
+        virtual void PacketRx(uint8_t port, uint8_t *payload, uint16_t size, int16_t rssi, int16_t snr, lora::DownlinkControl ctrl, uint8_t slot, uint8_t retries, uint32_t address, uint32_t fcnt, bool dupRx) {
             logDebug("mDotEvent - PacketRx ADDR: %08x", address);
             RxPort = port;
             PacketReceived = true;
@@ -228,11 +229,6 @@ class mDotEvent: public lora::MacEvents {
             }
 
             DuplicateRx = dupRx;
-
-            if (mts::MTSLog::getLogLevel() == mts::MTSLog::TRACE_LEVEL) {
-                std::string packet = mts::Text::bin2hexString(RxPayload, size);
-                logTrace("Payload: %s", packet.c_str());
-            }
 
             _flags.Bits.Tx = 0;
             _flags.Bits.Rx = 1;
@@ -277,11 +273,14 @@ class mDotEvent: public lora::MacEvents {
             logDebug("mDotEvent - ServerTime");
             ServerTimeReceived = true;
 
-            uint64_t current_server_time_ms = static_cast<uint64_t>(seconds) * 1000 +
-                static_cast<uint16_t>(sub_seconds) * 4 + _timeSinceTx.read_ms();
+            std::chrono::milliseconds current_server_time_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::seconds(seconds)) +
+                std::chrono::milliseconds(static_cast<uint16_t>(sub_seconds) * 4) +
+                std::chrono::milliseconds(_timeSinceTx.read_ms());
+                // std::chrono::duration_cast<std::chrono::milliseconds>(_timeSinceTx.elapsed_time());
 
-            ServerTimeSeconds = static_cast<uint32_t>(current_server_time_ms / 1000);
-            ServerTimeMillis = static_cast<uint16_t>(current_server_time_ms % 1000);
+            ServerTimeSeconds = static_cast<uint32_t>(current_server_time_ms.count() / 1000);
+            ServerTimeMillis = static_cast<uint16_t>(current_server_time_ms.count() % 1000);
         }
 
         virtual void NetworkLinkCheck(int16_t m_rssi, int16_t m_snr, int16_t s_snr, uint8_t s_gateways) {
