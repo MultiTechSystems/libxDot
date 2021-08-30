@@ -1,3 +1,14 @@
+
+# Release 4.1.0
+
+* Update ChannelPlan_AU915.cpp - add max payload values for DR8-DR13
+* Fixed issue where accessing files and sleeping in different threads would cause the MDot to lock up.
+* Ability to save a backup of protected settings (Device ID, Network ID, Network Key, and Gen App Key) in MDot One-Time-Programmable storage.
+* FOTA session now checks file system for space required to complete file download and upgrade process.  If inadequate space is available files are removed.
+* Ability to set trigger for WAKE pin as rising, falling, or either.
+* Updated to MBed OS 6.8.
+* Support for AS923-4.
+
 # Release 3.2.5
 
 ## Bug Fixes
