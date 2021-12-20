@@ -480,14 +480,14 @@ uint8_t ChannelPlan_US915::HandleNewChannel(const uint8_t* payload, uint8_t inde
 
     // Not Supported in US915
     status = 0;
-    return LORA_UNSUPPORTED;
+    return LORA_OK;
 }
 
 uint8_t ChannelPlan_US915::HandleDownlinkChannelReq(const uint8_t* payload, uint8_t index, uint8_t size, uint8_t& status) {
 
     // Not Supported in US915
     status = 0;
-    return LORA_UNSUPPORTED;
+    return LORA_OK;
 }
 
 uint8_t ChannelPlan_US915::HandlePingSlotChannelReq(const uint8_t* payload, uint8_t index, uint8_t size, uint8_t& status) {
@@ -771,10 +771,6 @@ std::vector<uint8_t> lora::ChannelPlan_US915::GetChannelRanges() {
 
 }
 
-uint8_t ChannelPlan_US915::SetDutyBandDutyCycle(uint8_t band, uint16_t dutyCycle) {
-    return LORA_UNSUPPORTED;
-}
-
 void lora::ChannelPlan_US915::EnableDefaultChannels() {
     SetFrequencySubBand(GetFrequencySubBand());
 }
@@ -888,7 +884,7 @@ uint8_t ChannelPlan_US915::GetNextChannel()
 uint8_t lora::ChannelPlan_US915::GetJoinDatarate() {
     uint8_t dr = GetSettings()->Session.TxDatarate;
     static uint8_t fsb = 1;
-    static uint8_t dr4_fsb = 0;
+    static uint8_t dr4_fsb = 1;
     static bool altdr = false;
 
     if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {

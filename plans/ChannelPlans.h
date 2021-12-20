@@ -39,4 +39,3 @@
 #define CP_AS923_3 10
 #define CP_AS923_JAPAN1 11
 #define CP_AS923_JAPAN2 12
-#define CP_AS923_4 13

@@ -41,14 +41,13 @@
 class mDotEvent;
 class LoRaConfig;
 
-mbed::BlockDevice * mdot_override_external_block_device();
 
 class mDot {
         friend class mDotEvent;
 
     private:
 
-        mDot(lora::ChannelPlan* plan);
+        mDot(lora::ChannelPlan* plan, mbed::BlockDevice* ext_bd = NULL);
         ~mDot();
 
         void initLora();
@@ -126,7 +125,6 @@ class mDot {
             MDOT_MAX_PAYLOAD_EXCEEDED = -12,
             MDOT_LBT_CHANNEL_BUSY = -13,
             MDOT_NOT_IDLE = -14,
-            MDOT_UNSUPPORTED = -15,
             MDOT_ERROR = -1024,
         } mdot_ret_code;
 
@@ -184,12 +182,6 @@ class mDot {
             RTC_ALARM,
             INTERRUPT,
             RTC_ALARM_OR_INTERRUPT
-        };
-
-        enum wakeup_trigger {
-            WAKE_TRIGGER_ANY,
-            WAKE_TRIGGER_RISE,
-            WAKE_TRIGGER_FALL
         };
 
         enum UserBackupRegs {
@@ -281,7 +273,7 @@ class mDot {
          * @param plan the channel plan to use
          * @returns pointer to mDot object
          */
-        static mDot* getInstance(lora::ChannelPlan* plan);
+        static mDot* getInstance(lora::ChannelPlan* plan, mbed::BlockDevice* ext_bd = NULL);
 
         /**
 	 * Can only be used after a dot has
@@ -934,16 +926,14 @@ class mDot {
         uint32_t getDownLinkCounter();
 
         /**
-         * Get RSSI stats.  All fields are invalid if last is invalid.
+         * Get RSSI stats
          * @returns rssi_stats struct containing last, min, max, and avg RSSI in dB
-         * @see lora::INVALID_RSSI
          */
         rssi_stats getRssiStats();
 
         /**
-         * Get SNR stats.  All fields are invalid if last is invalid.
+         * Get SNR stats
          * @returns snr_stats struct containing last, min, max, and avg SNR in cB
-         * @see lora::INVALID_SNR
          */
         snr_stats getSnrStats();
 
@@ -1455,36 +1445,12 @@ class mDot {
         void setWakePin(const PinName& pin);
 
         /**
-         * Set wake pin mode
-         * @param mode the mode used for the wake pin
-         */
-        void setWakePinMode(PinMode mode);
-
-        /**
-         * Set wake pin trigger
-         * @param trigger the trigger used for the wake pin
-         */
-        void setWakePinTrigger(uint8_t trigger);
-
-        /**
          * Get wake pin
          * @returns the pin to use to wake the device from sleep mode
          *      For MDOT, XBEE_DI (2-8)
          *      For XDOT, GPIO (0-3), UART1_RX, or WAKE
          */
         PinName getWakePin();
-
-        /**
-         * Get wake pin mode
-         * @returns the mode used for the wake pin
-         */
-        PinMode getWakePinMode();
-
-        /**
-         * Get wake pin trigger
-         * @returns the trigger condition for waking
-         */
-        uint8_t getWakePinTrigger();
 
         /**
          * Write data in a user backup register
@@ -1635,24 +1601,7 @@ class mDot {
         // Does not include SPIFFS overhead
         uint32_t getUsedSpace();
 
-        // Return free space for files saved in FLASH
-        uint32_t getFreeSpace();
-
         bool repairFlashFileSystem();
-
-        /** 
-         * Write Device EUI, Network ID, Netowrk Key, and Gen App Key to OTP.
-         * @return Number of write remaining if positive. A negative number
-         * indicates an error.
-         */
-        int writeOtp();
-
-        /** 
-         * Verify the data in OTP matches current values.
-         * @param commits the number of remaining commits if not NULL
-         * @return True if data matches.
-         */
-        bool verifyOtp(int* commits);
 #else
         ///////////////////////////////////////////////////////////////
         // EEPROM (Non Volatile Memory) Operation Functions for xDot //
@@ -1730,15 +1679,6 @@ class mDot {
 
         int32_t setRxDataRate(const uint8_t& dr);
         uint8_t getRxDataRate();
-
-        
-        // set/get duty cycle
-        int32_t setDutyCycle(uint8_t dc);
-        uint8_t getDutyCycle();
-
-        int32_t setDutyBandDutyCycle(uint8_t band, uint16_t dc);
-        uint8_t getDutyBands();
-        const lora::DutyBand* getDutyBand(uint8_t band);
 
         // get/set TX/RX frequency
         // if set to 0, device will hop frequencies

@@ -620,10 +620,11 @@ uint32_t ChannelPlan_IN865::GetTimeOffAir()
     uint32_t min = 0;
     uint32_t now = _dutyCycleTimer.read_ms();
 
-    if (GetSettings()->Test.DisableDutyCycle == lora::OFF) {
-        min = UINT_MAX;
-        int8_t band = 0;
 
+    min = UINT_MAX;
+    int8_t band = 0;
+
+    if (GetSettings()->Test.DisableDutyCycle == lora::OFF) {
         if (P2PEnabled()) {
             int8_t band = GetDutyBand(GetSettings()->Network.TxFrequency);
             if (_dutyBands[band].TimeOffEnd > now) {
@@ -650,9 +651,6 @@ uint32_t ChannelPlan_IN865::GetTimeOffAir()
                 }
             }
         }
-
-        if (min == UINT_MAX)
-            min = 0;
     }
 
     if (GetSettings()->Session.AggregatedTimeOffEnd > 0 && GetSettings()->Session.AggregatedTimeOffEnd > now) {
@@ -662,7 +660,7 @@ uint32_t ChannelPlan_IN865::GetTimeOffAir()
     now = time(NULL);
     uint32_t join_time = 0;
 
-    if (!GetSettings()->Session.Joined && GetSettings()->Session.JoinFirstAttempt != 0 && now < GetSettings()->Session.JoinTimeOffEnd) {
+    if (GetSettings()->Session.JoinFirstAttempt != 0 && now < GetSettings()->Session.JoinTimeOffEnd) {
         join_time = (GetSettings()->Session.JoinTimeOffEnd - now) * 1000;
     }
 

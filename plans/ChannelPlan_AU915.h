@@ -250,13 +250,6 @@ namespace lora {
              */
             virtual std::vector<uint8_t> GetChannelRanges();
 
-            /**
-             * Set the duty cycle for the given duty band
-             * @param band index
-             * @param dutyCycle ratio of time off air to time on air
-             * @return LORA_UNSUPPORTED
-             */
-            virtual uint8_t SetDutyBandDutyCycle(uint8_t band, uint16_t dutyCycle);
 
             /**
              * Print log message for given rx window
@@ -313,7 +306,7 @@ namespace lora {
 
         protected:
 
-            static const uint8_t AU915_TX_POWERS[15];                   //!< List of available tx powers
+            static const uint8_t AU915_TX_POWERS[11];                   //!< List of available tx powers
             static const uint8_t AU915_MAX_PAYLOAD_SIZE[];              //!< List of max payload sizes for each datarate
             static const uint8_t AU915_MAX_PAYLOAD_SIZE_400[];          //!< List of max payload sizes for each datarate
             static const uint8_t AU915_MAX_PAYLOAD_SIZE_REPEATER[];     //!< List of repeater compatible max payload sizes for each datarate

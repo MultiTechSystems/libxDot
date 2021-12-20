@@ -20,11 +20,11 @@
 
 using namespace lora;
 
-const uint8_t ChannelPlan_AU915::AU915_TX_POWERS[] = { 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2 };
+const uint8_t ChannelPlan_AU915::AU915_TX_POWERS[] = { 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10 };
 const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE[] = { 51, 51, 51, 115, 242, 242, 242, 0, 53, 129, 242, 242, 242, 242, 0, 0 };
 const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_REPEATER[] = { 51, 51, 51, 115, 222, 222, 222, 0, 33, 109, 222, 222, 222, 222, 0, 0 };
-const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_400[] = { 0, 0, 11, 53, 125, 242, 242, 0, 53, 129, 242, 242, 242, 242, 0, 0 };
-const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_REPEATER_400[] = { 0, 0, 11, 53, 125, 222, 222, 222, 0, 33, 109, 222, 222, 222, 222, 0, 0 };
+const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_400[] = { 0, 0, 11, 53, 125, 242, 242, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_REPEATER_400[] = { 0, 0, 11, 53, 125, 222, 222, 222, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 const uint8_t ChannelPlan_AU915::MAX_ERP_VALUES[] = { 8, 10, 12, 13, 14, 16, 18, 20, 21, 24, 26, 27, 29, 30, 33, 36 };
 
@@ -488,14 +488,14 @@ uint8_t ChannelPlan_AU915::HandleNewChannel(const uint8_t* payload, uint8_t inde
 
     // Not Supported in AU915
     status = 0;
-    return LORA_UNSUPPORTED;
+    return LORA_OK;
 }
 
 uint8_t ChannelPlan_AU915::HandleDownlinkChannelReq(const uint8_t* payload, uint8_t index, uint8_t size, uint8_t& status) {
 
     // Not Supported in AU915
     status = 0;
-    return LORA_UNSUPPORTED;
+    return LORA_OK;
 }
 
 uint8_t ChannelPlan_AU915::HandlePingSlotChannelReq(const uint8_t* payload, uint8_t index, uint8_t size, uint8_t& status) {
@@ -597,9 +597,9 @@ uint8_t ChannelPlan_AU915::HandleAdrCommand(const uint8_t* payload, uint8_t inde
         status &= 0xFD; // Datarate KO
     }
     //
-    // Remark MaxTxPower = 0 and MinTxPower = 14
+    // Remark MaxTxPower = 0 and MinTxPower = 10
     //
-    if (power != 0xF && power > 14) {
+    if (power != 0xF && power > 10) {
         status &= 0xFB; // TxPower KO
     }
 
@@ -781,10 +781,6 @@ std::vector<uint8_t> lora::ChannelPlan_AU915::GetChannelRanges() {
 
 }
 
-uint8_t ChannelPlan_AU915::SetDutyBandDutyCycle(uint8_t band, uint16_t dutyCycle) {
-    return LORA_UNSUPPORTED;
-}
-
 void lora::ChannelPlan_AU915::EnableDefaultChannels() {
     SetFrequencySubBand(GetFrequencySubBand());
 }
@@ -895,7 +891,7 @@ uint8_t ChannelPlan_AU915::GetNextChannel()
 uint8_t lora::ChannelPlan_AU915::GetJoinDatarate() {
     uint8_t dr = GetSettings()->Session.TxDatarate;
     static uint8_t fsb = 1;
-    static uint8_t dr6_fsb = 0;
+    static uint8_t dr6_fsb = 1;
     static bool altdr = false;
 
     if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
