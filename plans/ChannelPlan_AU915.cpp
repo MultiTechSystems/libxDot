@@ -20,11 +20,11 @@
 
 using namespace lora;
 
-const uint8_t ChannelPlan_AU915::AU915_TX_POWERS[] = { 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10 };
+const uint8_t ChannelPlan_AU915::AU915_TX_POWERS[] = { 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2 };
 const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE[] = { 51, 51, 51, 115, 242, 242, 242, 0, 53, 129, 242, 242, 242, 242, 0, 0 };
 const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_REPEATER[] = { 51, 51, 51, 115, 222, 222, 222, 0, 33, 109, 222, 222, 222, 222, 0, 0 };
-const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_400[] = { 0, 0, 11, 53, 125, 242, 242, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_REPEATER_400[] = { 0, 0, 11, 53, 125, 222, 222, 222, 0, 0, 0, 0, 0, 0, 0, 0 };
+const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_400[] = { 0, 0, 11, 53, 125, 242, 242, 0, 53, 129, 242, 242, 242, 242, 0, 0 };
+const uint8_t ChannelPlan_AU915::AU915_MAX_PAYLOAD_SIZE_REPEATER_400[] = { 0, 0, 11, 53, 125, 222, 222, 222, 0, 33, 109, 222, 222, 222, 222, 0, 0 };
 
 const uint8_t ChannelPlan_AU915::MAX_ERP_VALUES[] = { 8, 10, 12, 13, 14, 16, 18, 20, 21, 24, 26, 27, 29, 30, 33, 36 };
 
@@ -96,6 +96,7 @@ void ChannelPlan_AU915::Init() {
     GetSettings()->Session.PingSlotFrequency = AU915_BEACON_FREQ_BASE;
     GetSettings()->Session.PingSlotDatarateIndex = AU915_BEACON_DR;
     GetSettings()->Session.PingSlotFreqHop = true;
+    GetSettings()->Session.Max_EIRP = 16;
 
     _minDatarate = lora::DR_2;
     _maxDatarate = AU915_MAX_DATARATE;
@@ -488,14 +489,14 @@ uint8_t ChannelPlan_AU915::HandleNewChannel(const uint8_t* payload, uint8_t inde
 
     // Not Supported in AU915
     status = 0;
-    return LORA_OK;
+    return LORA_UNSUPPORTED;
 }
 
 uint8_t ChannelPlan_AU915::HandleDownlinkChannelReq(const uint8_t* payload, uint8_t index, uint8_t size, uint8_t& status) {
 
     // Not Supported in AU915
     status = 0;
-    return LORA_OK;
+    return LORA_UNSUPPORTED;
 }
 
 uint8_t ChannelPlan_AU915::HandlePingSlotChannelReq(const uint8_t* payload, uint8_t index, uint8_t size, uint8_t& status) {
@@ -597,9 +598,9 @@ uint8_t ChannelPlan_AU915::HandleAdrCommand(const uint8_t* payload, uint8_t inde
         status &= 0xFD; // Datarate KO
     }
     //
-    // Remark MaxTxPower = 0 and MinTxPower = 10
+    // Remark MaxTxPower = 0 and MinTxPower = 14
     //
-    if (power != 0xF && power > 10) {
+    if (power != 0xF && power > 14) {
         status &= 0xFB; // TxPower KO
     }
 
@@ -661,8 +662,12 @@ uint8_t ChannelPlan_AU915::HandleAdrCommand(const uint8_t* payload, uint8_t inde
         if (status == 0x07) {
             if (datarate != 0xF)
                 GetSettings()->Session.TxDatarate = datarate;
-            if (power != 0xF)
-                GetSettings()->Session.TxPower = TX_POWERS[power];
+            if (power != 0xF) {
+                if (GetSettings()->Session.Max_EIRP > (power * 2))
+                    GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP - (power * 2);
+                else
+                    GetSettings()->Session.TxPower = 0;
+            }
             GetSettings()->Session.Redundancy = nbRep;
         }
     } else {
@@ -689,7 +694,7 @@ uint8_t ChannelPlan_AU915::ValidateAdrConfiguration() {
             logWarning("ADR Datarate KO - TxDwelltime != 0 and DR < 2");
             status &= 0xFD; // Datarate KO
         }
-        if (power < _minTxPower || power > _maxTxPower) {
+        if (power < _minTxPower || power > GetSettings()->Session.Max_EIRP) {
             logWarning("ADR TX Power KO - outside allowed range");
             status &= 0xFB; // TxPower KO
         }
@@ -779,6 +784,10 @@ std::vector<uint8_t> lora::ChannelPlan_AU915::GetChannelRanges() {
 
     return ranges;
 
+}
+
+uint8_t ChannelPlan_AU915::SetDutyBandDutyCycle(uint8_t band, uint16_t dutyCycle) {
+    return LORA_UNSUPPORTED;
 }
 
 void lora::ChannelPlan_AU915::EnableDefaultChannels() {
@@ -890,31 +899,37 @@ uint8_t ChannelPlan_AU915::GetNextChannel()
 
 uint8_t lora::ChannelPlan_AU915::GetJoinDatarate() {
     uint8_t dr = GetSettings()->Session.TxDatarate;
-    static uint8_t fsb = 1;
-    static uint8_t dr6_fsb = 1;
-    static bool altdr = false;
 
     if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
-        if (GetSettings()->Network.FrequencySubBand == 0) {
-            if (fsb < 9) {
-                SetFrequencySubBand(fsb);
-                logDebug("JoinDatarate setting frequency sub band to %d",fsb);
-                fsb++;
-                dr = lora::DR_2;
-            } else {
-                dr = lora::DR_6;
-                fsb = 1;
-                dr6_fsb++;
-                if(dr6_fsb > 8)
-                    dr6_fsb = 1;
-                SetFrequencySubBand(dr6_fsb);
-            }
-        } else if (altdr && CountBits(_channelMask[4] > 0)) {
-            dr = lora::DR_6;
+        uint8_t fsb = 1;
+        uint8_t dr4_fsb = 1;
+        bool altdr = false;
+
+        altdr = (GetSettings()->Network.DevNonce % 2) == 0;
+
+        if ((GetSettings()->Network.DevNonce % 9) == 0) {
+            dr4_fsb = GetSettings()->Network.DevNonce / 9;
+            fsb = 9;
         } else {
-            dr = lora::DR_2;
+            fsb = (GetSettings()->Network.DevNonce % 9);
         }
-        altdr = !altdr;
+
+        if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
+            if (GetSettings()->Network.FrequencySubBand == 0) {
+                if (fsb < 9) {
+                    SetFrequencySubBand(fsb);
+                    dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
+                } else {
+                    SetFrequencySubBand(dr4_fsb);
+                    dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
+                }
+            } else if (altdr && CountBits(_channelMask[4] > 0)) {
+                dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
+            } else {
+                dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
+            }
+            altdr = !altdr;
+        }
     }
 
     return dr;
@@ -924,20 +939,24 @@ uint8_t lora::ChannelPlan_AU915::CalculateJoinBackoff(uint8_t size) {
 
     time_t now = time(NULL);
     uint32_t time_on_max = 0;
-    static uint32_t time_off_max = 15;
+    uint32_t time_off_max = 15;
     uint32_t rand_time_off = 0;
-    static uint16_t join_cnt = 0;
-
-    // TODO: calc time-off-max based on RTC time from JoinFirstAttempt, time-off-max is lost over sleep
+    uint16_t join_cnt = 0;
 
     if ((time_t)GetSettings()->Session.JoinTimeOffEnd > now) {
         return LORA_JOIN_BACKOFF;
     }
 
+    if (GetSettings()->Session.JoinFirstAttempt > 0) {
+        // Time since first join / 10  so after 600s max is 60s and after 3600s (1hr) max is 360s (6min) up to 60min
+        time_off_max = (now - GetSettings()->Session.JoinFirstAttempt) / 10;
+        time_off_max = std::min < uint32_t > (time_off_max, 60 * 60);
+    }
+
     uint32_t secs_since_first_attempt = (now - GetSettings()->Session.JoinFirstAttempt);
     uint16_t hours_since_first_attempt = secs_since_first_attempt / (60 * 60);
 
-    join_cnt = (join_cnt+1) % 16;
+    join_cnt = (GetSettings()->Network.DevNonce) % 16;
 
     if (GetSettings()->Session.JoinFirstAttempt == 0) {
         /* 1 % duty-cycle for first hour
@@ -949,9 +968,7 @@ uint8_t lora::ChannelPlan_AU915::CalculateJoinBackoff(uint8_t size) {
     } else if (join_cnt == 0) {
         if (hours_since_first_attempt < 1) {
             time_on_max = 36000;
-            rand_time_off = rand_r(time_off_max - 1, time_off_max + 1);
-            // time off max 1 hour
-            time_off_max = std::min < uint32_t > (time_off_max * 2, 60 * 60);
+            rand_time_off = rand_r(time_off_max / 2, time_off_max);
 
             if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
                 GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
@@ -965,9 +982,7 @@ uint8_t lora::ChannelPlan_AU915::CalculateJoinBackoff(uint8_t size) {
                 GetSettings()->Session.JoinTimeOnAir = 36000;
             }
             time_on_max = 72000;
-            rand_time_off = rand_r(time_off_max - 1, time_off_max + 1);
-            // time off max 1 hour
-            time_off_max = std::min < uint32_t > (time_off_max * 2, 60 * 60);
+            rand_time_off = rand_r(time_off_max / 2, time_off_max);
 
             if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
                 GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
@@ -983,8 +998,7 @@ uint8_t lora::ChannelPlan_AU915::CalculateJoinBackoff(uint8_t size) {
             // 16 join attempts is ~3192 ms, check if this is the third of the 24 hour period
 
             time_on_max = 80700;
-            time_off_max = 1 * 60 * 60; // 1 hour
-            rand_time_off = rand_r(time_off_max - 1, time_off_max + 1);
+            rand_time_off = rand_r(time_off_max / 2, time_off_max);
 
             if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
                 GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
@@ -1030,6 +1044,11 @@ uint8_t ChannelPlan_AU915::HandleMacCommand(uint8_t* payload, uint8_t& index) {
 
             GetSettings()->Session.Max_EIRP = MAX_ERP_VALUES[(eirp_dwell & 0x0F)];
             logDebug("buffer index %d", GetSettings()->Session.CommandBufferIndex);
+
+            if (GetSettings()->Session.TxPower > GetSettings()->Session.Max_EIRP) {
+                GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP;
+            }
+
             if (GetSettings()->Session.CommandBufferIndex < std::min<int>(GetMaxPayloadSize(), COMMANDS_BUFFER_SIZE)) {
                 logDebug("Add tx param setup mac cmd to buffer");
                 GetSettings()->Session.CommandBuffer[GetSettings()->Session.CommandBufferIndex++] = MOTE_MAC_TX_PARAM_SETUP_ANS;

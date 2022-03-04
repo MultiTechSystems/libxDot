@@ -75,6 +75,10 @@ void ChannelPlan_AS923::Init() {
     #define AS923_FREQ_OFFSET_HZ -6600000U
     _plan = AS923_3;
     _planName = "AS923-3";
+    #elif CHANNEL_PLAN == CP_AS923_4
+    #define AS923_FREQ_OFFSET_HZ -5900000U
+    _plan = AS923_4;
+    _planName = "AS923-4";
     #else // CHANNEL_PLAN == CP_AS923
     #define AS923_FREQ_OFFSET_HZ 0U
     _plan = AS923;
@@ -113,8 +117,7 @@ void ChannelPlan_AS923::Init() {
     GetSettings()->Session.PingSlotFrequency = AS923_BEACON_FREQ + AS923_FREQ_OFFSET_HZ;
     GetSettings()->Session.PingSlotDatarateIndex = AS923_BEACON_DR;
     GetSettings()->Session.PingSlotFreqHop = false;
-
-    GetSettings()->Session.Max_EIRP  = 16;
+    GetSettings()->Session.Max_EIRP = 16;
 
     logInfo("Initialize datarates...");
 
@@ -322,18 +325,20 @@ void ChannelPlan_AS923::LogRxWindow(uint8_t wnd) {
     logTrace("RX DR: %u SF: %u BW: %u CR: %u PL: %u STO: %u CRC: %d IQ: %d", rxDr.Index, sf, bw, cr, pl, sto, crc, iq);
 }
 
-uint8_t ChannelPlan_AS923::GetMaxPayloadSize() {
-    if (GetSettings()->Session.UplinkDwelltime == 1) {
+uint8_t ChannelPlan_AS923::GetMaxPayloadSize(uint8_t dr, Direction dir) {
+    if (GetSettings()->Session.UplinkDwelltime == 1 && dir == DIR_UP) {
         if (GetSettings()->Network.RepeaterMode)
-            return AS923_MAX_PAYLOAD_SIZE_REPEATER_400[GetSettings()->Session.TxDatarate];
+            return AS923_MAX_PAYLOAD_SIZE_REPEATER_400[dr];
         else
-            return AS923_MAX_PAYLOAD_SIZE_400[GetSettings()->Session.TxDatarate];
+            return AS923_MAX_PAYLOAD_SIZE_400[dr];
     } else {
         if (GetSettings()->Network.RepeaterMode)
-            return MAX_PAYLOAD_SIZE_REPEATER[GetSettings()->Session.TxDatarate];
+            return MAX_PAYLOAD_SIZE_REPEATER[dr];
         else
-            return MAX_PAYLOAD_SIZE[GetSettings()->Session.TxDatarate];
+            return MAX_PAYLOAD_SIZE[dr];
     }
+
+    return 0;
 }
 
 RxWindow ChannelPlan_AS923::GetRxWindow(uint8_t window, int8_t id) {
@@ -605,8 +610,12 @@ uint8_t ChannelPlan_AS923::HandleAdrCommand(const uint8_t* payload, uint8_t inde
         if (status == 0x07) {
             if (datarate != 0xF)
                 GetSettings()->Session.TxDatarate = datarate;
-            if (power != 0xF)
-                GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP - (power * 2);
+            if (power != 0xF) {
+                if (GetSettings()->Session.Max_EIRP > (power * 2))
+                    GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP - (power * 2);
+                else
+                    GetSettings()->Session.TxPower = 0;
+            }
             GetSettings()->Session.Redundancy = nbRep;
         }
     } else {
@@ -634,7 +643,7 @@ uint8_t ChannelPlan_AS923::ValidateAdrConfiguration() {
             status &= 0xFD; // Datarate KO
         }
 
-        if (power < _minTxPower || power > _maxTxPower) {
+        if (power < _minTxPower || power > GetSettings()->Session.Max_EIRP) {
             logWarning("ADR TX Power KO - outside allowed range");
             status &= 0xFB; // TxPower KO
         }
@@ -864,10 +873,10 @@ uint8_t ChannelPlan_AS923::GetNextChannel()
 
 uint8_t lora::ChannelPlan_AS923::GetJoinDatarate() {
     uint8_t dr = GetSettings()->Session.TxDatarate;
-    static uint8_t cnt = 1;
+    uint8_t cnt = GetSettings()->Network.DevNonce % 12;
 
     if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
-        if ((cnt++ % 12) == 0) {
+        if ((cnt % 12) == 0) {
             dr = lora::DR_2;
         } else if ((cnt % 8) == 0) {
             dr = lora::DR_3;
@@ -885,21 +894,25 @@ uint8_t ChannelPlan_AS923::CalculateJoinBackoff(uint8_t size) {
 
     time_t now = time(NULL);
     uint32_t time_on_max = 0;
-    static uint32_t time_off_max = 15;
+    uint32_t time_off_max = 15;
     uint32_t rand_time_off = 0;
-
-    // TODO: calc time-off-max based on RTC time from JoinFirstAttempt, time-off-max is lost over sleep
+    uint8_t join_cnt = 0;
 
     if ((time_t)GetSettings()->Session.JoinTimeOffEnd > now) {
         return LORA_JOIN_BACKOFF;
     }
 
+    if (GetSettings()->Session.JoinFirstAttempt > 0) {
+        // Time since first join / 10  so after 600s max is 60s and after 3600s (1hr) max is 360s (6min) up to 60min
+        time_off_max = (now - GetSettings()->Session.JoinFirstAttempt) / 10;
+        time_off_max = std::min < uint32_t > (time_off_max, 60 * 60);
+    }
+
     uint32_t secs_since_first_attempt = (now - GetSettings()->Session.JoinFirstAttempt);
     uint16_t hours_since_first_attempt = secs_since_first_attempt / (60 * 60);
 
-    static uint8_t join_cnt = 0;
-
-    join_cnt = (join_cnt+1) % 8;
+    // Allow 8 attempts before backoff
+    join_cnt = (GetSettings()->Network.DevNonce) % 8;
 
     if (GetSettings()->Session.JoinFirstAttempt == 0) {
         /* 1 % duty-cycle for first hour
@@ -911,9 +924,7 @@ uint8_t ChannelPlan_AS923::CalculateJoinBackoff(uint8_t size) {
     } else if (join_cnt == 0) {
         if (hours_since_first_attempt < 1) {
             time_on_max = 36000;
-            rand_time_off = rand_r(time_off_max - 1, time_off_max + 1);
-            // time off max 1 hour
-            time_off_max = std::min < uint32_t > (time_off_max * 2, 60 * 60);
+            rand_time_off = rand_r(time_off_max / 2, time_off_max);
 
             if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
                 GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
@@ -927,9 +938,7 @@ uint8_t ChannelPlan_AS923::CalculateJoinBackoff(uint8_t size) {
                 GetSettings()->Session.JoinTimeOnAir = 36000;
             }
             time_on_max = 72000;
-            rand_time_off = rand_r(time_off_max - 1, time_off_max + 1);
-            // time off max 1 hour
-            time_off_max = std::min < uint32_t > (time_off_max * 2, 60 * 60);
+            rand_time_off = rand_r(time_off_max / 2, time_off_max);
 
             if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
                 GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
@@ -945,8 +954,7 @@ uint8_t ChannelPlan_AS923::CalculateJoinBackoff(uint8_t size) {
             uint32_t join_time = 2500;
 
             time_on_max = 80700;
-            time_off_max = 1 * 60 * 60; // 1 hour
-            rand_time_off = rand_r(time_off_max - 1, time_off_max + 1);
+            rand_time_off = rand_r(time_off_max / 2, time_off_max);
 
             if (GetSettings()->Session.JoinTimeOnAir < time_on_max - join_time) {
                 GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
@@ -1000,6 +1008,11 @@ uint8_t ChannelPlan_AS923::HandleMacCommand(uint8_t* payload, uint8_t& index) {
 
             GetSettings()->Session.Max_EIRP = MAX_ERP_VALUES[(eirp_dwell & 0x0F)];
             logDebug("buffer index %d", GetSettings()->Session.CommandBufferIndex);
+
+            if (GetSettings()->Session.TxPower > GetSettings()->Session.Max_EIRP) {
+                GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP;
+            }
+
             if (GetSettings()->Session.CommandBufferIndex < std::min<int>(GetMaxPayloadSize(), COMMANDS_BUFFER_SIZE)) {
                 logDebug("Add tx param setup mac cmd to buffer");
                 GetSettings()->Session.CommandBuffer[GetSettings()->Session.CommandBufferIndex++] = MOTE_MAC_TX_PARAM_SETUP_ANS;

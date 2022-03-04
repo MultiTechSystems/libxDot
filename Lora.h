@@ -27,9 +27,7 @@
 
 namespace lora {
 
-#ifndef MAC_VERSION
-    const std::string MAC_VERSION = "1.0.4";
-#endif
+    extern const char* const MAC_VERSION;
 
     /**
      * Frequency bandwidth of a Datarate, higher bandwidth gives higher datarate
@@ -145,6 +143,11 @@ namespace lora {
     const uint8_t FRAME_OVERHEAD = 13;                          //!< Bytes of network info overhead in a frame
 
     const uint16_t MAX_OFF_AIR_WAIT = 5000U;                    //!< Max time in ms to block for a duty cycle restriction to expire before erroring out
+
+    const int16_t INVALID_RSSI = 0x7FFF;                        //!< Value used in statistics when RSSI value is unknown
+
+    const int16_t INVALID_SNR = 0x7FFF;                         //!< Value used in statistics when SNR value is unknown
+
     /**
      * Settings for type of network
      *
@@ -195,7 +198,8 @@ namespace lora {
         LORA_MAX_PAYLOAD_EXCEEDED = 18,
         LORA_LBT_CHANNEL_BUSY = 19,
         LORA_BEACON_SIZE = 20,
-        LORA_BEACON_CRC = 21
+        LORA_BEACON_CRC = 21,
+        LORA_UNSUPPORTED = 22
     };
 
     /**

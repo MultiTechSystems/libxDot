@@ -66,6 +66,7 @@ namespace lora {
                 AS923_3 = DYNAMIC | 0x07,
                 AS923_JAPAN1 = DYNAMIC | 0x08,
                 AS923_JAPAN2 = DYNAMIC | 0x09,
+                AS923_4 = DYNAMIC | 0x0A,
 
                 NONE = 0xFF,
             };
@@ -200,7 +201,7 @@ namespace lora {
              * Get max payload size for a given datarate
              * @return size in bytes
              */
-            virtual uint8_t GetMaxPayloadSize(uint8_t dr);
+            virtual uint8_t GetMaxPayloadSize(uint8_t dr, Direction dir = DIR_UP);
 
             /**
              * Get rx window settings for requested window
@@ -452,6 +453,13 @@ namespace lora {
             virtual uint32_t GetDutyBandTimeOff(uint8_t band);
 
             /**
+             * Set the duty cycle for the given duty band
+             * @param band index
+             * @param dutyCycle ratio of time off air to time on air
+             */
+            virtual uint8_t SetDutyBandDutyCycle(uint8_t band, uint16_t dutyCycle);
+
+            /**
              * Get the number of duty bands in the current channel plan
              * @return number of bands
              */
@@ -463,6 +471,13 @@ namespace lora {
              * @return index of duty band
              */
             virtual int8_t GetDutyBand(uint32_t freq);
+
+            /**
+             * Get a pointer to a duty band object
+             * @param index duty band index
+             * @param band output DutyBand object
+             */
+            virtual void GetDutyBand(uint8_t index, const DutyBand** band) const;
 
             /**
              * Add duty band
@@ -546,6 +561,7 @@ namespace lora {
             virtual bool IsPlanDynamic();
             static bool IsPlanFixed(uint8_t plan);
             static bool IsPlanDynamic(uint8_t plan);
+            bool IsPlanAS923();
             virtual uint32_t GetMinFrequency();
             virtual uint32_t GetMaxFrequency();
 
