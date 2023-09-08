@@ -1,6 +1,7 @@
-The Dot library provides a LoRaWan certified stack for LoRa communication using MultiTech mDot and xDot devices. The stack is compatible with mbed 5.
+The Dot library provides a LoRaWan certified stack for LoRa communication using MultiTech mDot and xDot devices. 
+This repository is for mbed-os 6 and built using ARM Compiler 6.11
 
-Dot Library versions 3.x.x require a channel plan to be injected into the stack. Channel plans are included with the 3.x.x Dot Library releases. The following code snippet demonstrates how to create a channel plan and inject it into the stack.
+The following code snippet demonstrates how to create a channel plan and inject it into the stack.
 
 ```c++
 #include "mDot.h"
@@ -19,6 +20,10 @@ int main() {
 **Dot devices must not be deployed with software using a different channel plan than the Dot's default plan! This functionality is for development and testing only!**
 
 The name of the repository can be used to determine which device the stack was compiled for and if it's a development or production-ready build:
+  * [libmDot](http://github.com/MultiTechSystems/libmDot/) -> production-ready build for mDot mbed-os 6.x
+  * [libmDot-dev](http://github.com/MultiTechSystems/libmDot-dev/) -> development build for mDot mbed-os 6.x
+  * [libxDot](http://github.com/MultiTechSystems/libxDot/) -> production-ready build for xDot mbed-os 6.x
+  * [libxDot-dev](http://github.com/MultiTechSystems/libxDot-dev/) -> development build for xDot mbed-os 6.x
   * [libmDot-mbed5](http://github.com/MultiTechSystems/libmDot-mbed5/) -> production-ready build for mDot
   * [libmDot-dev-mbed5](http://github.com/MultiTechSystems/libmDot-dev-mbed5/) -> development build for mDot
   * [libxDot-mbed5](http://github.com/MultiTechSystems/libxDot-mbed5/) -> production-ready build for xDot
