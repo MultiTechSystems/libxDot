@@ -1,4 +1,31 @@
 
+# Release 4.2.1
+
+Update to library 4.2.1 built with mbed-os-6.16.0
+Same version used in AT Firmware v4.2.1
+
+* Updates to pass LCTT 3.10.0_R2
+  * Needed to disable auto increment DR to pass MAC_104_BV_019_B and MAC_104_BV_021
+  * Needed to select unused channels before reusing channels
+* Sleep will save session automatically and restore session after wakeup
+* Added getDisableIncrementDR and setDisableIncrementDR to control automatic DR increases if MAC commands and payload to send is larger than the current DR supports, check bytes available before send with getNextTxMaxSize
+* Added custom device-id and serial number to EEPROM, setCustomDeviceID and setCustomSerialNumber
+* Added channel selection algorithm to select unused channels before reusing recent channels
+
+
+# Release 4.1.4
+
+Update to library 4.1.4 built with mbed-os-6.8.0
+Same version used in AT Firmware v4.1.5
+
+* Add wake pin trigger
+* Add write OTP for mDot only
+* Add dutyCycle managment functions for AS923 plans
+* Add GLOBAL Channel Plan option
+* Update Join Backoff to work over sleep and increase randomness of back-off durations
+
+Fixed: RTC sleep duration above 4294 seconds is now supported
+
 # Release 4.1.0
 
 * Update ChannelPlan_AU915.cpp - add max payload values for DR8-DR13

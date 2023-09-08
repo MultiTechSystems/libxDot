@@ -36,6 +36,9 @@ namespace lora {
     const uint32_t EU868_MILLI_FREQ_MIN = 865000000;
     const uint32_t EU868_MILLI_FREQ_MAX = 868000000;
 
+    const uint32_t EU868_MILLI_0_FREQ_MIN = 863000000;
+    const uint32_t EU868_MILLI_0_FREQ_MAX = 865000000;
+
     const uint32_t EU868_MILLI_1_FREQ_MIN = 868700000;
     const uint32_t EU868_MILLI_1_FREQ_MAX = 869200000;
 
@@ -56,7 +59,7 @@ namespace lora {
     const uint32_t EU868_FREQ_MAX = 870000000;
 
     const uint8_t EU868_MIN_DATARATE = (uint8_t) DR_0;           //!< Minimum transmit datarate for EU868
-    const uint8_t EU868_MAX_DATARATE = (uint8_t) DR_7;           //!< Maximum transmit datarate for EU868
+    const uint8_t EU868_MAX_DATARATE = (uint8_t) DR_5;           //!< Maximum transmit datarate for EU868
 
     const uint8_t EU868_MIN_DATARATE_OFFSET = (uint8_t) 0;       //!< Minimum transmit datarate for US915
     const uint8_t EU868_MAX_DATARATE_OFFSET = (uint8_t) 5;       //!< Maximum transmit datarate for US915
@@ -118,13 +121,6 @@ namespace lora {
              * @return datarate index
              */
             virtual uint8_t GetJoinDatarate();
-
-            /**
-             * Calculate the next time a join request is possible
-             * @param size of join frame
-             * @returns LORA_OK
-             */
-            virtual uint8_t CalculateJoinBackoff(uint8_t size);
 
             /**
              * Get next channel and set the SxRadio tx config with current settings

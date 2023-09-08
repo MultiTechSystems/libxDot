@@ -94,11 +94,16 @@ void ChannelPlan_AS923::Init() {
     MAX_PAYLOAD_SIZE = AS923_MAX_PAYLOAD_SIZE;
     MAX_PAYLOAD_SIZE_REPEATER = AS923_MAX_PAYLOAD_SIZE_REPEATER;
 
-    _minDatarate = 0;
-    _maxDatarate = 7;
-
+    _minDatarate = DR_0;
     _minRx2Datarate = DR_0;
+
+#if defined(ENABLE_LORAWAN_OPTIONAL_DATARATES)
     _maxRx2Datarate = DR_7;
+    _maxDatarate = DR_7;
+#else
+    _maxRx2Datarate = DR_5;
+    _maxDatarate = DR_5;
+#endif
 
     _minDatarateOffset = 0;
     _maxDatarateOffset = 7;
@@ -143,8 +148,6 @@ void ChannelPlan_AS923::Init() {
     dr.Coderate = 0;
     AddDatarate(-1, dr);
     dr.Index++;
-
-    _maxDatarate = DR_7;
 
     // Skip DR8-15 RFU
     dr.SpreadingFactor = SF_INVALID;
@@ -195,7 +198,7 @@ void ChannelPlan_AS923::Init() {
     band.TimeOffEnd = 0;
 
     // Disable duty-cycle limits
-    band.DutyCycle = 0;
+    band.DutyCycle = 10;
 
     AddDutyBand(-1, band);
 
@@ -254,7 +257,7 @@ uint8_t ChannelPlan_AS923::SetTxConfig() {
     pwr = std::min < int8_t > (GetSettings()->Session.TxPower, max_pwr);
     pwr -= GetSettings()->Network.AntennaGain;
 
-    for (int i = 20; i >= 0; i--) {
+    for (int i = RADIO_POWERS_SIZE; i >= 0; i--) {
         if (RADIO_POWERS[i] <= pwr) {
             pwr = i;
             break;
@@ -306,7 +309,7 @@ uint8_t ChannelPlan_AS923::SetFrequencySubBand(uint8_t sub_band) {
 }
 
 void ChannelPlan_AS923::LogRxWindow(uint8_t wnd) {
-
+#if defined(MTS_DEBUG)
     RxWindow rxw = GetRxWindow(wnd);
     Datarate rxDr = GetDatarate(rxw.DatarateIndex);
     uint8_t bw = rxDr.Bandwidth;
@@ -323,6 +326,7 @@ void ChannelPlan_AS923::LogRxWindow(uint8_t wnd) {
 
     logTrace("RX%d on freq: %lu", wnd, freq);
     logTrace("RX DR: %u SF: %u BW: %u CR: %u PL: %u STO: %u CRC: %d IQ: %d", rxDr.Index, sf, bw, cr, pl, sto, crc, iq);
+#endif
 }
 
 uint8_t ChannelPlan_AS923::GetMaxPayloadSize(uint8_t dr, Direction dir) {
@@ -427,6 +431,14 @@ uint8_t ChannelPlan_AS923::HandleRxParamSetup(const uint8_t* payload, uint8_t in
         logInfo("DR Offset KO");
         status &= 0xFB; // Rx1DrOffset range KO
     }
+
+#if !defined(ENABLE_LORAWAN_OPTIONAL_DATARATES)
+    // LCTT expects this Rx1Offset 6 & 7 to be rejected if TxDR is DR5 or greater
+    if (drOffset >= 6 && ( (GetSettings()->Session.TxDatarate + ((drOffset == 6) ? 1 : 2)) > DR_5 ) ) {
+        logInfo("DR Offset KO");
+        status &= 0xFB; // Rx1DrOffset range KO
+    }
+#endif
 
     if ((status & 0x07) == 0x07) {
         logInfo("RxParamSetup accepted Rx2DR: %d Rx2Freq: %d Rx1Offset: %d", datarate, freq, drOffset);
@@ -715,6 +727,8 @@ uint32_t ChannelPlan_AS923::GetTimeOffAir()
 
 
 void ChannelPlan_AS923::UpdateDutyCycle(uint32_t freq, uint32_t time_on_air_ms) {
+    _dutyCycleTimer.start();
+
     uint32_t time_off_air = 0;
     uint32_t now = std::chrono::duration_cast<std::chrono::milliseconds>(_dutyCycleTimer.elapsed_time()).count();
 
@@ -845,8 +859,10 @@ uint8_t ChannelPlan_AS923::GetNextChannel()
         int16_t timeout = 10000;
         Timer tmr;
         tmr.start();
+        auto tmr_ms = duration_cast<milliseconds>(tmr.elapsed_time()).count();
 
-        for (uint8_t j = rand_r(0, nbEnabledChannels - 1); tmr.read_ms() < timeout; j++) {
+        for (uint8_t j = rand_r(0, nbEnabledChannels - 1); tmr_ms < timeout; j++) {
+            tmr_ms = duration_cast<milliseconds>(tmr.elapsed_time()).count();
             freq = GetChannel(enabledChannels[j]).Frequency;
 
             // Listen before talk
@@ -890,93 +906,6 @@ uint8_t lora::ChannelPlan_AS923::GetJoinDatarate() {
     return dr;
 }
 
-uint8_t ChannelPlan_AS923::CalculateJoinBackoff(uint8_t size) {
-
-    time_t now = time(NULL);
-    uint32_t time_on_max = 0;
-    uint32_t time_off_max = 15;
-    uint32_t rand_time_off = 0;
-    uint8_t join_cnt = 0;
-
-    if ((time_t)GetSettings()->Session.JoinTimeOffEnd > now) {
-        return LORA_JOIN_BACKOFF;
-    }
-
-    if (GetSettings()->Session.JoinFirstAttempt > 0) {
-        // Time since first join / 10  so after 600s max is 60s and after 3600s (1hr) max is 360s (6min) up to 60min
-        time_off_max = (now - GetSettings()->Session.JoinFirstAttempt) / 10;
-        time_off_max = std::min < uint32_t > (time_off_max, 60 * 60);
-    }
-
-    uint32_t secs_since_first_attempt = (now - GetSettings()->Session.JoinFirstAttempt);
-    uint16_t hours_since_first_attempt = secs_since_first_attempt / (60 * 60);
-
-    // Allow 8 attempts before backoff
-    join_cnt = (GetSettings()->Network.DevNonce) % 8;
-
-    if (GetSettings()->Session.JoinFirstAttempt == 0) {
-        /* 1 % duty-cycle for first hour
-         * 0.1 % next 10 hours
-         * 0.01 % upto 24 hours         */
-        GetSettings()->Session.JoinFirstAttempt = now;
-        GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
-        GetSettings()->Session.JoinTimeOffEnd = now + (GetTimeOnAir(size) / 10);
-    } else if (join_cnt == 0) {
-        if (hours_since_first_attempt < 1) {
-            time_on_max = 36000;
-            rand_time_off = rand_r(time_off_max / 2, time_off_max);
-
-            if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
-                GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
-                GetSettings()->Session.JoinTimeOffEnd = now + rand_time_off;
-            } else {
-                logWarning("Max time-on-air limit met for current join backoff period");
-                GetSettings()->Session.JoinTimeOffEnd = GetSettings()->Session.JoinFirstAttempt + 60 * 60;
-            }
-        } else if (hours_since_first_attempt < 11) {
-            if (GetSettings()->Session.JoinTimeOnAir < 36000) {
-                GetSettings()->Session.JoinTimeOnAir = 36000;
-            }
-            time_on_max = 72000;
-            rand_time_off = rand_r(time_off_max / 2, time_off_max);
-
-            if (GetSettings()->Session.JoinTimeOnAir < time_on_max) {
-                GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
-                GetSettings()->Session.JoinTimeOffEnd = now + rand_time_off;
-            } else {
-                logWarning("Max time-on-air limit met for current join backoff period");
-                GetSettings()->Session.JoinTimeOffEnd = GetSettings()->Session.JoinFirstAttempt + 11 * 60 * 60;
-            }
-        } else {
-            if (GetSettings()->Session.JoinTimeOnAir < 72000) {
-                GetSettings()->Session.JoinTimeOnAir = 72000;
-            }
-            uint32_t join_time = 2500;
-
-            time_on_max = 80700;
-            rand_time_off = rand_r(time_off_max / 2, time_off_max);
-
-            if (GetSettings()->Session.JoinTimeOnAir < time_on_max - join_time) {
-                GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
-                GetSettings()->Session.JoinTimeOffEnd = now + rand_time_off;
-            } else {
-                logWarning("Max time-on-air limit met for current join backoff period");
-                // Reset the join time on air and set end of restriction to the next 24 hour period
-                GetSettings()->Session.JoinTimeOnAir = 72000;
-                uint16_t days = (now - GetSettings()->Session.JoinFirstAttempt) / (24 * 60 * 60) + 1;
-                logWarning("days : %d", days);
-                GetSettings()->Session.JoinTimeOffEnd = GetSettings()->Session.JoinFirstAttempt + ((days * 24) + 11) * 60 * 60;
-            }
-        }
-
-        logWarning("JoinBackoff: %lu seconds  Time On Air: %lu / %lu", GetSettings()->Session.JoinTimeOffEnd - now, GetSettings()->Session.JoinTimeOnAir, time_on_max);
-    } else {
-        GetSettings()->Session.JoinTimeOnAir += GetTimeOnAir(size);
-        GetSettings()->Session.JoinTimeOffEnd = now + (GetTimeOnAir(size) / 10);
-    }
-
-    return LORA_OK;
-}
 
 uint8_t ChannelPlan_AS923::GetMinDatarate() {
     if (GetSettings()->Session.UplinkDwelltime == 1)
