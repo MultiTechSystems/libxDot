@@ -38,27 +38,10 @@
 
 #include "FlashRecordStore.h"
 
-const uint8_t MULTICAST_SESSIONS = 8;
-
-#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_L151CC) || (defined(TARGET_XDOT_MAX32670)) // && !defined(TARGET_XDOTES_MAX32670) )
-#define USE_NVM_CONFIG
-#if defined(TARGET_XDOT_MAX32670)
-#define USE_EEPROM_BACKUP
-#else
-#define USE_RTC_BACKUP
-#endif
-class LoRaConfig;
-mbed::BlockDevice * mdot_override_external_block_device();
-
-#else
-#if defined(TARGET_XDOT_MAX32670) && defined(TARGET_XDOTES_MAX32670)
-#define USE_EEPROM_BACKUP
-#endif
-#define USE_RAM_CONFIG
-class LoRaConfigRAM;
-#endif
-
 class mDotEvent;
+class LoRaConfig;
+
+mbed::BlockDevice * mdot_override_external_block_device();
 
 class mDot {
         friend class mDotEvent;
@@ -83,17 +66,19 @@ class mDot {
         mDot(const mDot&);
         mDot& operator=(const mDot&);
 
-        void enterStopMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM, bool stopModeForDeepSleep = false);
+        uint32_t RTC_ReadBackupRegister(uint32_t RTC_BKP_DR);
+        void RTC_WriteBackupRegister(uint32_t RTC_BKP_DR, uint32_t Data);
+
+        void RTC_DisableWakeupTimer();
+        void RTC_EnableWakeupTimer();
+
+        void enterStopMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM);
         void enterStandbyMode(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM);
 
         static mDot* _instance;
 
         lora::Mote* _mote;
-#if defined(USE_NVM_CONFIG)
         LoRaConfig* _config;
-#else
-        LoRaConfigRAM* _config;
-#endif
         lora::Settings _settings;
         mDotEvent* _events;
 
@@ -112,17 +97,6 @@ class mDot {
         } state;
 
     public:
-
-#if defined(USE_NVM_CONFIG)
-#if defined(USE_EEPROM_BACKUP)
-#else
-        uint32_t RTC_ReadBackupRegister(uint32_t RTC_BKP_DR);
-        void RTC_WriteBackupRegister(uint32_t RTC_BKP_DR, uint32_t Data);
-
-#endif // USE_EEPROM_BACKUP
-        void RTC_DisableWakeupTimer();
-        void RTC_EnableWakeupTimer();
-#endif
 
 #if defined(TARGET_MTS_MDOT_F411RE)
         typedef enum {
@@ -153,7 +127,6 @@ class mDot {
             MDOT_LBT_CHANNEL_BUSY = -13,
             MDOT_NOT_IDLE = -14,
             MDOT_UNSUPPORTED = -15,
-            MDOT_NO_CHANNEL_PLAN = -16,
             MDOT_ERROR = -1024,
         } mdot_ret_code;
 
@@ -219,7 +192,6 @@ class mDot {
             WAKE_TRIGGER_FALL
         };
 
-#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_L151CC) || defined(TARGET_XDOT_MAX32670)
         enum UserBackupRegs {
             UBR0,
             UBR1,
@@ -231,7 +203,7 @@ class mDot {
             UBR7,
             UBR8,
             UBR9
-#if defined (TARGET_XDOT_L151CC) || defined(TARGET_XDOT_MAX32670)
+#if defined (TARGET_XDOT_L151CC)
            ,UBR10,
             UBR11,
             UBR12,
@@ -246,8 +218,6 @@ class mDot {
             UBR21
 #endif /* TARGET_XDOT_L151CC */
         };
-#endif /* TARGET_MTS_MDOT_F411RE) || TARGET_XDOT_L151CC || TARGET_XDOT_MAX32670 */
-
 
 #if defined(TARGET_MTS_MDOT_F411RE)
         typedef struct {
@@ -302,7 +272,7 @@ class mDot {
 
 #if defined(TARGET_MTS_MDOT_F411RE)
         uint32_t UserRegisters[10];
-#elif defined(TARGET_XDOT_L151CC) || defined(TARGET_XDOT_MAX32670)
+#else
         uint32_t UserRegisters[22];
 #endif /* TARGET_MTS_MDOT_F411RE */
 
@@ -588,34 +558,6 @@ class mDot {
         std::vector<uint8_t> getDeviceId();
 
         /**
-         * Set custom device id
-         * a storage for a custom device id in protected storage that is not reset on factory defaults
-         * @param cust_id a string of up to 16 characters
-         * @return MDOT_OK if success
-         */
-        int32_t setCustomDeviceID(const std::string& cust_id);
-
-        /**
-         * Get custom device id
-         * @return string containing custom device id (up to 16 characters)
-         */
-        std::string getCustomDeviceID();
-
-        /**
-         * Set custom serial number
-         * a storage for a custom serial number in protected storage that is not reset on factory defaults
-         * @param serial_no a string of up to 16 characters
-         * @return MDOT_OK if success
-         */
-        int32_t setCustomSerialNumber(const std::string& serial_no);
-
-        /**
-         * Get custom serial number
-         * @return string containing serial number (up to 16 characters)
-         */
-        std::string getCustomSerialNumber();
-
-        /**
          * Get the device port to be used for lora application data (1-223)
          *  @returns port
          */
@@ -887,7 +829,7 @@ class mDot {
          * Save current network session to flash
          * has no effect for MANUAL network join mode
          */
-        void saveNetworkSession(bool write=true);
+        void saveNetworkSession();
 
         /**
          * Set number of times joining will retry each sub-band before changing
@@ -1161,12 +1103,6 @@ class mDot {
          */
         uint32_t getRadioRandom();
 
-        int32_t getClockOffset();
-        void setClockOffset(int32_t val);
-
-        uint32_t getClockUpdated();
-        void setClockUpdated(uint32_t val);
-
         /**
          * Get data rate spreading factor and bandwidth
          * EU868 Datarates
@@ -1331,26 +1267,6 @@ class mDot {
          * @returns exp = 7 - log2(number_of_pings)
          */
         uint8_t getPingPeriodicity();
-
-        /**
-         *
-         * get/set fota enabled
-         *
-         * true == FOTA is on
-         * set function returns MDOT_OK if success
-         */
-        int32_t setFota(const bool& on);
-        bool getFota();
-
-        /**
-         *
-         * get/set ADR auto increment dr
-         *
-         * true == ADR Auto Increment datarate is off
-         * set function returns MDOT_OK if success
-         */
-        int32_t setDisableIncrementDR(const bool& on);
-        bool getDisableIncrementDR();
 
         /**
          *
@@ -1570,8 +1486,6 @@ class mDot {
          */
         uint8_t getWakePinTrigger();
 
-
-#if defined(USE_NVM_CONFIG)
         /**
          * Write data in a user backup register
          * @param register one of UBR0 through UBR9 for MDOT, one of UBR0 through UBR21 for XDOT
@@ -1587,7 +1501,6 @@ class mDot {
          * @returns true if success
          */
         bool readUserBackupRegister(uint32_t reg, uint32_t& data);
-#endif
 
         /**
          * Set LBT time in us
@@ -1727,20 +1640,20 @@ class mDot {
 
         bool repairFlashFileSystem();
 
-        /**
+        /** 
          * Write Device EUI, Network ID, Netowrk Key, and Gen App Key to OTP.
          * @return Number of write remaining if positive. A negative number
          * indicates an error.
          */
         int writeOtp();
 
-        /**
+        /** 
          * Verify the data in OTP matches current values.
          * @param commits the number of remaining commits if not NULL
          * @return True if data matches.
          */
         bool verifyOtp(int* commits);
-#elif defined(TARGET_XDOT_L151CC) || defined(TARGET_XDOT_MAX32670)
+#else
         ///////////////////////////////////////////////////////////////
         // EEPROM (Non Volatile Memory) Operation Functions for xDot //
         ///////////////////////////////////////////////////////////////
@@ -1818,7 +1731,7 @@ class mDot {
         int32_t setRxDataRate(const uint8_t& dr);
         uint8_t getRxDataRate();
 
-
+        
         // set/get duty cycle
         int32_t setDutyCycle(uint8_t dc);
         uint8_t getDutyCycle();
@@ -1898,19 +1811,6 @@ class mDot {
         uint8_t getDisableDutyCycle();
 
         /**
-         * Disable Auto Join Datarate cycle
-         * enables or disables automatic datarate cycling for device joins. TxDatarate setting will be used.
-         * @param val true to disable using automatic join datarate (default:false)
-         */
-        int32_t setDisableAutoJoinDatarate(bool val);
-
-        /**
-         * Disable Auto Join Datarate
-         * @return true if automatic join datarate is disabled (default:false)
-         */
-        uint8_t getDisableAutoJoinDatarate();
-
-        /**
          * LBT RSSI
          * @return the current RSSI on the configured frequency (SetTxFrequency) using configured LBT Time
          */
@@ -1923,18 +1823,13 @@ class mDot {
         void closeRxWindow();
         void sendContinuous(bool enable=true, uint32_t timeout=0, uint32_t frequency=0, int8_t txpower=-1);
         int32_t setDeviceId(const std::vector<uint8_t>& id);
-
-#if defined(USE_NVM_CONFIG)
         int32_t setProtectedAppEUI(const std::vector<uint8_t>& appEUI);
         int32_t setProtectedAppKey(const std::vector<uint8_t>& appKey);
         std::vector<uint8_t> getProtectedAppEUI();
         std::vector<uint8_t> getProtectedAppKey();
         int32_t setProtectedGenAppKey(const std::vector<uint8_t>& appKey);
-        bool saveProtectedConfig();
-#endif
-
         int32_t setDefaultFrequencyBand(const uint8_t& band);
-
+        bool saveProtectedConfig();
         // resets the radio/mac/link
         void resetRadio();
         int32_t setRadioMode(const uint8_t& mode);
@@ -1960,30 +1855,6 @@ class mDot {
 
         void mcGroupKeys(uint8_t *mcKeyEncrypt, uint32_t addr, uint8_t groupId, uint32_t frame_count);
 
-#if defined(TARGET_XDOT_MAX32670)
-        void setVddMin(uint8_t vdd);
-        uint8_t getVddMin(void);
-#if defined(MTS_RADIO_CTRL_COMMANDS)
-        void setRadioLNA(uint8_t boosted);
-        uint8_t getRadioLNA(void);
-        void setRadioPaDuty(uint8_t paDutyCycle);
-        uint8_t getRadioPaDuty(void);
-        void setRadioHpMax(uint8_t hpMax);
-        uint8_t getRadioHpMax(void);
-        void setRadioXTATrim(uint8_t xtaTrim);
-        uint8_t getRadioXTATrim(void);
-        void setRadioXTBTrim(uint8_t xtbTrim);
-        uint8_t getRadioXTBTrim(void);
-        void setSWState(uint8_t value);
-        uint8_t getSWState(void);
-        void setRampTime(uint8_t rampTime);
-        uint8_t getRampTime(void);
-        void setTxInfPreambleMode(uint8_t enable, int8_t power, uint32_t frequency, uint32_t bandwidth, uint8_t spreadingFactor);
-        uint8_t getTxInfPreambleMode(void);
-        void radioSleep(void);
-#endif // MTS_RADIO_CTRL_COMMANDS
-#endif // TARGET_XDOT_MAX32670
-
 #if defined(FOTA) && FLASH_RECORD_STORE_FILE_ENABLE
         mts::FlashFileRecord* getFotaFileRecord();
 #endif
@@ -2004,35 +1875,7 @@ class mDot {
 
         bool _standbyFlag;
         uint8_t _savedPort;
-
-#if TEST_MODE_ENABLE
-        void handleTestModePacket();
-        bool _testMode;
-#endif
         lora::ChannelPlan* _plan;
-
-        struct BackupData
-        {
-            uint32_t time_then;
-            uint32_t duty_cycle_1;
-            uint32_t duty_cycle_2;
-            uint32_t duty_cycle_3;
-            uint32_t duty_cycle_4;
-            uint32_t duty_cycle_temp;
-            uint32_t uplink;
-            uint32_t join_first_attempt;
-            uint32_t join_time_on_air;
-            uint32_t tx_data_rate;
-            uint32_t srv_ack;
-        };
-
-        void rtcAlarmDisable();
-        void clearSleepFlags();
-        void enableBackup();
-        void getBackup(BackupData& backup);
-        void setBackup(const BackupData& backup);
-        bool resetFromStandby();
-        void reset();
 };
 
 #endif

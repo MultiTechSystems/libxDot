@@ -105,6 +105,18 @@ void ChannelPlan_GLOBAL::Init() {
         case lora::ChannelPlan::AS923_JAPAN2:
             Init_AS923();
             break;
+#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_MAX32670)
+        case lora::ChannelPlan::KR920:
+            Init_KR920();
+            break;
+        case lora::ChannelPlan::IN865:
+            Init_IN865();
+            break;
+        case lora::ChannelPlan::RU864:
+            Init_RU864();
+            break;
+#endif
+
     }
 
 }
@@ -756,21 +768,409 @@ void ChannelPlan_GLOBAL::DefaultLBT() {
             _LBT_TimeUs = 5000;
             _LBT_Threshold = -80;
         }
+    } else if (_plan == KR920) {
+        _LBT_TimeUs = 5000;
+        _LBT_Threshold = -65;
     }
+
 }
 
 
 
 void ChannelPlan_GLOBAL::Init_KR920() {
+#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_MAX32670)
+    _datarates.clear();
+    _channels.clear();
+    _dutyBands.clear();
 
+    DutyBand band;
+
+    band.Index = 0;
+    band.DutyCycle = 0;
+
+    Datarate dr;
+
+    _plan = KR920;
+    _planName = "KR920";
+    _maxTxPower = 14;
+    _minTxPower = 0;
+
+    _minFrequency = 920900000;
+    _maxFrequency = 923300000;
+
+    DefaultLBT();
+
+    TX_POWERS = KR920_TX_POWERS;
+    MAX_PAYLOAD_SIZE = KR920_MAX_PAYLOAD_SIZE;
+    MAX_PAYLOAD_SIZE_REPEATER = KR920_MAX_PAYLOAD_SIZE_REPEATER;
+
+    _minDatarate = 0;
+    _maxDatarate = 5;
+
+    _minRx2Datarate = DR_0;
+    _maxRx2Datarate = DR_5;
+
+    _minDatarateOffset = 0;
+    _maxDatarateOffset = 5;
+
+    _numChans125k = 16;
+    _numChans500k = 0;
+    _numDefaultChans = KR920_DEFAULT_NUM_CHANS;
+
+    GetSettings()->Session.Rx2Frequency = 921900000;
+    GetSettings()->Session.Rx2DatarateIndex = DR_0;
+
+    GetSettings()->Session.BeaconFrequency = KR920_BEACON_FREQ;
+    GetSettings()->Session.BeaconFreqHop = false;
+    GetSettings()->Session.PingSlotFrequency = KR920_BEACON_FREQ;
+    GetSettings()->Session.PingSlotDatarateIndex = KR920_BEACON_DR;
+    GetSettings()->Session.PingSlotFreqHop = false;
+
+    logInfo("Initialize datarates...");
+
+    dr.SpreadingFactor = SF_12;
+
+    // Add DR0-5
+    while (dr.SpreadingFactor >= SF_7) {
+        AddDatarate(-1, dr);
+        dr.SpreadingFactor--;
+        dr.Index++;
+    }
+
+    // Skip DR6-15 RFU
+    dr.SpreadingFactor = SF_INVALID;
+    while (dr.Index++ <= DR_15) {
+        AddDatarate(-1, dr);
+    }
+
+    GetSettings()->Session.TxDatarate = 0;
+
+    logInfo("Initialize channels...");
+
+    Channel chan;
+    chan.DrRange.Fields.Min = DR_0;
+    chan.DrRange.Fields.Max = DR_5;
+    chan.Index = 0;
+    chan.Frequency = 922100000;
+    SetNumberOfChannels(16);
+
+    for (uint8_t i = 0; i < _numDefaultChans; i++) {
+        AddChannel(i, chan);
+        chan.Index++;
+        chan.Frequency += 200000;
+    }
+
+    chan.DrRange.Value = 0;
+    chan.Frequency = 0;
+
+    for (uint8_t i = _numDefaultChans; i < 16; i++) {
+        AddChannel(i, chan);
+        chan.Index++;
+    }
+
+    // Add downlink channel defaults
+    chan.Index = 0;
+    _dlChannels.resize(16);
+    for (uint8_t i = 0; i < 16; i++) {
+        AddDownlinkChannel(i, chan);
+        chan.Index++;
+    }
+
+    SetChannelMask(0, 0x07);
+
+    band.Index = 0;
+    band.FrequencyMin = _minFrequency;
+    band.FrequencyMax = _maxFrequency;
+    band.PowerMax = 14;
+    band.TimeOffEnd = 0;
+
+    // Disable duty-cycle limits
+    band.DutyCycle = 0;
+
+    AddDutyBand(-1, band);
+
+    GetSettings()->Session.TxPower = GetSettings()->Network.TxPower;
+#endif
 }
 
 void ChannelPlan_GLOBAL::Init_IN865() {
+#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_MAX32670)
+    _datarates.clear();
+    _channels.clear();
+    _dutyBands.clear();
 
+    DutyBand band;
+
+    band.Index = 0;
+    band.DutyCycle = 0;
+
+    Datarate dr;
+
+    _plan = IN865;
+    _planName = "IN865";
+    _maxTxPower = 30;
+    _minTxPower = 0;
+
+    _minFrequency = 865000000;
+    _maxFrequency = 867000000;
+
+    TX_POWERS = IN865_TX_POWERS;
+    MAX_PAYLOAD_SIZE = IN865_MAX_PAYLOAD_SIZE;
+    MAX_PAYLOAD_SIZE_REPEATER = IN865_MAX_PAYLOAD_SIZE_REPEATER;
+
+    _minDatarate = 0;
+    _minRx2Datarate = DR_0;
+
+#if defined(ENABLE_LORAWAN_OPTIONAL_DATARATES)
+    _maxDatarate = DR_7;
+    _maxRx2Datarate = DR_7;
+#else
+    _maxDatarate = DR_5;
+    _maxRx2Datarate = DR_5;
+#endif
+
+    _minDatarateOffset = 0;
+    _maxDatarateOffset = 7;
+
+    _numChans125k = 16;
+    _numChans500k = 0;
+    _numDefaultChans = IN865_DEFAULT_NUM_CHANS;
+
+    GetSettings()->Session.Rx2Frequency = 866550000;
+    GetSettings()->Session.Rx2DatarateIndex = DR_2;
+
+    GetSettings()->Session.BeaconFrequency = IN865_BEACON_FREQ;
+    GetSettings()->Session.BeaconFreqHop = false;
+    GetSettings()->Session.PingSlotFrequency = IN865_BEACON_FREQ;
+    GetSettings()->Session.PingSlotDatarateIndex = IN865_BEACON_DR;
+    GetSettings()->Session.PingSlotFreqHop = false;
+
+    logInfo("Initialize datarates...");
+
+    dr.SpreadingFactor = SF_12;
+
+    // Add DR0-5
+    while (dr.SpreadingFactor >= SF_7) {
+        AddDatarate(-1, dr);
+        dr.SpreadingFactor--;
+        dr.Index++;
+    }
+
+    // Skip DR6
+    AddDatarate(-1, dr);
+    dr.Index++;
+
+    // Add DR7
+    dr.SpreadingFactor = SF_FSK;
+    dr.Bandwidth = BW_FSK;
+    dr.PreambleLength = 10;
+    dr.Coderate = 0;
+    AddDatarate(-1, dr);
+    dr.Index++;
+
+    // Skip DR8-15 RFU
+    dr.SpreadingFactor = SF_INVALID;
+    while (dr.Index++ <= DR_15) {
+        AddDatarate(-1, dr);
+    }
+
+    GetSettings()->Session.TxDatarate = 0;
+
+    logInfo("Initialize channels...");
+
+    Channel chan;
+    chan.DrRange.Fields.Min = DR_0;
+    chan.DrRange.Fields.Max = DR_5;
+    chan.Index = 0;
+    chan.Frequency = 865062500;
+    SetNumberOfChannels(16);
+
+    AddChannel(0, chan);
+
+    chan.Index++;
+    chan.Frequency = 865402500;
+    AddChannel(1, chan);
+
+    chan.Index++;
+    chan.Frequency = 865985000;
+    AddChannel(2, chan);
+
+
+    chan.DrRange.Value = 0;
+    chan.Frequency = 0;
+
+    for (uint8_t i = _numDefaultChans; i < 16; i++) {
+        AddChannel(i, chan);
+        chan.Index++;
+    }
+
+    // Add downlink channel defaults
+    chan.Index = 0;
+    _dlChannels.resize(16);
+    for (uint8_t i = 0; i < 16; i++) {
+        AddDownlinkChannel(i, chan);
+        chan.Index++;
+    }
+
+    SetChannelMask(0, 0x07);
+
+    band.Index = 0;
+    band.FrequencyMin = _minFrequency;
+    band.FrequencyMax = _maxFrequency;
+    band.PowerMax = 30;
+    band.TimeOffEnd = 0;
+
+    // Disable duty-cycle limits
+    band.DutyCycle = 0;
+
+    AddDutyBand(-1, band);
+
+    GetSettings()->Session.TxPower = GetSettings()->Network.TxPower;
+#endif
 }
 
 void ChannelPlan_GLOBAL::Init_RU864() {
+#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_MAX32670)
+    _datarates.clear();
+    _channels.clear();
+    _dutyBands.clear();
 
+    DutyBand band;
+
+    band.Index = 0;
+    band.DutyCycle = 0;
+
+    Datarate dr;
+
+    _plan = RU864;
+    _planName = "RU864";
+    _maxTxPower = 27;
+    _minTxPower = 0;
+
+    _minFrequency = RU864_FREQ_MIN;
+    _maxFrequency = RU864_FREQ_MAX;
+
+    TX_POWERS = RU864_TX_POWERS;
+    MAX_PAYLOAD_SIZE = RU864_MAX_PAYLOAD_SIZE;
+    MAX_PAYLOAD_SIZE_REPEATER = RU864_MAX_PAYLOAD_SIZE_REPEATER;
+
+    _minDatarate = DR_0;
+    _minRx2Datarate = DR_0;
+
+#if defined(ENABLE_LORAWAN_OPTIONAL_DATARATES)
+    _maxDatarate = DR_7;
+    _maxRx2Datarate = DR_7;
+#else
+    _maxDatarate = DR_5;
+    _maxRx2Datarate = DR_5;
+#endif
+
+    _minDatarateOffset = RU864_MIN_DATARATE_OFFSET;
+    _maxDatarateOffset = RU864_MAX_DATARATE_OFFSET;
+
+    _numChans125k = RU864_125K_NUM_CHANS;
+    _numChans500k = 0;
+    _numDefaultChans = RU864_DEFAULT_NUM_CHANS;
+
+    GetSettings()->Session.Rx2Frequency = RU864_RX2_FREQ;
+    GetSettings()->Session.Rx2DatarateIndex = DR_0;
+
+    GetSettings()->Session.BeaconFrequency = RU864_BEACON_FREQ;
+    GetSettings()->Session.BeaconFreqHop = false;
+    GetSettings()->Session.PingSlotFrequency = RU864_PING_SLOT_FREQ;
+    GetSettings()->Session.PingSlotDatarateIndex = RU864_BEACON_DR;
+    GetSettings()->Session.PingSlotFreqHop = false;
+
+    logInfo("Initialize datarates...");
+
+    dr.SpreadingFactor = SF_12;
+
+    // Add DR0-5
+    while (dr.SpreadingFactor >= SF_7) {
+        AddDatarate(-1, dr);
+        dr.SpreadingFactor--;
+        dr.Index++;
+    }
+
+    // Add DR6
+    dr.SpreadingFactor = SF_7;
+    dr.Bandwidth = BW_250;
+    AddDatarate(-1, dr);
+    dr.Index++;
+
+    // Add DR7
+    dr.SpreadingFactor = SF_FSK;
+    dr.Bandwidth = BW_FSK;
+    dr.PreambleLength = 10;
+    dr.Coderate = 0;
+    AddDatarate(-1, dr);
+    dr.Index++;
+
+
+    // Skip DR8-15 RFU
+    dr.SpreadingFactor = SF_INVALID;
+    while (dr.Index++ <= DR_15) {
+        AddDatarate(-1, dr);
+    }
+
+    GetSettings()->Session.TxDatarate = 0;
+
+    logInfo("Initialize channels...");
+
+    Channel chan;
+    chan.DrRange.Fields.Min = DR_0;
+    chan.DrRange.Fields.Max = DR_5;
+    chan.Index = 0;
+    chan.Frequency = RU864_125K_FREQ_BASE;
+    SetNumberOfChannels(RU864_125K_NUM_CHANS);
+
+    for (uint8_t i = 0; i < RU864_DEFAULT_NUM_CHANS; i++) {
+        chan.DrRange.Fields.Max = DR_5;
+
+        AddChannel(i, chan);
+        chan.Index++;
+        chan.Frequency += RU864_125K_FREQ_STEP;
+    }
+
+    chan.DrRange.Value = 0;
+    chan.Frequency = 0;
+
+    for (uint8_t i = RU864_DEFAULT_NUM_CHANS; i < RU864_125K_NUM_CHANS; i++) {
+        AddChannel(i, chan);
+        chan.Index++;
+    }
+
+    // Add downlink channel defaults
+    chan.Index = 0;
+    _dlChannels.resize(16);
+    for (uint8_t i = 0; i < 16; i++) {
+        AddDownlinkChannel(i, chan);
+        chan.Index++;
+    }
+
+    SetChannelMask(0, 0x07);
+
+    band.Index = 0;
+    band.FrequencyMin = RU864_MILLI_FREQ_MIN;
+    band.FrequencyMax = RU864_MILLI_FREQ_MAX;
+    band.PowerMax = 14;
+    band.TimeOffEnd = 0;
+
+    band.DutyCycle = 1000;
+
+    AddDutyBand(-1, band);
+
+    band.Index++;
+    band.FrequencyMin = RU864_MILLI_FREQ_MAX;
+    band.FrequencyMax = RU864_FREQ_MAX;
+    band.PowerMax = 14;
+    band.TimeOffEnd = 0;
+    band.DutyCycle = 0;
+
+    AddDutyBand(-1, band);
+
+    GetSettings()->Session.TxPower = GetSettings()->Network.TxPower;
+#endif
 }
 
 
@@ -1423,6 +1823,8 @@ uint8_t ChannelPlan_GLOBAL::HandleAdrCommand(const uint8_t* payload, uint8_t ind
         }
         break;
         case EU868:
+        case RU864:
+        case KR920:
         {
             //
             // Remark MaxTxPower = 0 and MinTxPower = 7
@@ -1432,6 +1834,17 @@ uint8_t ChannelPlan_GLOBAL::HandleAdrCommand(const uint8_t* payload, uint8_t ind
             }
         }
         break;
+#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_MAX32670)
+        case IN865:
+        {
+            //
+            // Remark MaxTxPower = 0 and MinTxPower = 10
+            //
+            if (power != 0xF && power > 10) {
+                status &= 0xFB; // TxPower KO
+            }
+        }
+#endif
     }
 
     if (IsPlanAS923()) {
@@ -2088,6 +2501,7 @@ uint8_t ChannelPlan_GLOBAL::DecodeBeacon(const uint8_t* payload, size_t size, Be
             memcpy(&data.Latitude, &beacon->GwSpecific[1], 3);
             memcpy(&data.Longitude, &beacon->GwSpecific[4], 3);
         }
+
     } else if (_plan == AU915) {
         const BCNPayload_AU915* beacon = (const BCNPayload_AU915*)payload;
 
@@ -2178,7 +2592,101 @@ uint8_t ChannelPlan_GLOBAL::DecodeBeacon(const uint8_t* payload, size_t size, Be
             memcpy(&data.Latitude, &beacon->GwSpecific[1], 3);
             memcpy(&data.Longitude, &beacon->GwSpecific[4], 3);
         }
+#if defined(TARGET_MTS_MDOT_F411RE) || defined(TARGET_XDOT_MAX32670)
+    } else if (_plan == IN865) {
+        const BCNPayload_IN865* beacon = (const BCNPayload_IN865*)payload;
+
+        // First check the size of the packet
+        if (size != sizeof(BCNPayload_IN865))
+            return LORA_BEACON_SIZE;
+
+        // Next we verify CRC1 is correct
+        crc1 = CRC16(beacon->RFU1, sizeof(beacon->RFU1) + sizeof(beacon->Time));
+        memcpy((uint8_t*)&crc1_rx, beacon->CRC1, sizeof(uint16_t));
+
+        if (crc1 != crc1_rx)
+            return LORA_BEACON_CRC;
+
+        // Now that we have confirmed this packet is a beacon, parse and complete the output struct
+        memcpy(&data.Time, beacon->Time, sizeof(beacon->Time));
+        data.InfoDesc = beacon->GwSpecific[0];
+
+        crc2 = CRC16(beacon->GwSpecific, sizeof(beacon->GwSpecific));
+        memcpy((uint8_t*)&crc2_rx, beacon->CRC2, sizeof(uint16_t));
+
+        // Update the GPS fields if we have a gps info descriptor and valid crc
+        if (crc2 == crc2_rx &&
+            (data.InfoDesc == GPS_FIRST_ANTENNA ||
+            data.InfoDesc == GPS_SECOND_ANTENNA ||
+            data.InfoDesc == GPS_THIRD_ANTENNA)) {
+            // Latitude and Longitude 3 bytes in length
+            memcpy(&data.Latitude, &beacon->GwSpecific[1], 3);
+            memcpy(&data.Longitude, &beacon->GwSpecific[4], 3);
+        }
+    } else if (_plan == KR920) {
+        const BCNPayload_KR920* beacon = (const BCNPayload_KR920*)payload;
+
+        // First check the size of the packet
+        if (size != sizeof(BCNPayload_KR920))
+            return LORA_BEACON_SIZE;
+
+        // Next we verify CRC1 is correct
+        crc1 = CRC16(beacon->RFU, sizeof(beacon->RFU) + sizeof(beacon->Time));
+        memcpy((uint8_t*)&crc1_rx, beacon->CRC1, sizeof(uint16_t));
+
+        if (crc1 != crc1_rx)
+            return LORA_BEACON_CRC;
+
+        // Now that we have confirmed this packet is a beacon, parse and complete the output struct
+        memcpy(&data.Time, beacon->Time, sizeof(beacon->Time));
+        data.InfoDesc = beacon->GwSpecific[0];
+
+        crc2 = CRC16(beacon->GwSpecific, sizeof(beacon->GwSpecific));
+        memcpy((uint8_t*)&crc2_rx, beacon->CRC2, sizeof(uint16_t));
+
+        // Update the GPS fields if we have a gps info descriptor and valid crc
+        if (crc2 == crc2_rx &&
+            (data.InfoDesc == GPS_FIRST_ANTENNA ||
+            data.InfoDesc == GPS_SECOND_ANTENNA ||
+            data.InfoDesc == GPS_THIRD_ANTENNA)) {
+            // Latitude and Longitude 3 bytes in length
+            memcpy(&data.Latitude, &beacon->GwSpecific[1], 3);
+            memcpy(&data.Longitude, &beacon->GwSpecific[4], 3);
+        }
+    } else if (_plan == RU864) {
+        const BCNPayload_RU864* beacon = (const BCNPayload_RU864*)payload;
+
+        // First check the size of the packet
+        if (size != sizeof(BCNPayload_RU864))
+            return LORA_BEACON_SIZE;
+
+        // Next we verify CRC1 is correct
+        crc1 = CRC16(beacon->RFU, sizeof(beacon->RFU) + sizeof(beacon->Time));
+        memcpy((uint8_t*)&crc1_rx, beacon->CRC1, sizeof(uint16_t));
+
+        if (crc1 != crc1_rx)
+            return LORA_BEACON_CRC;
+
+        // Now that we have confirmed this packet is a beacon, parse and complete the output struct
+        memcpy(&data.Time, beacon->Time, sizeof(beacon->Time));
+        data.InfoDesc = beacon->GwSpecific[0];
+
+        crc2 = CRC16(beacon->GwSpecific, sizeof(beacon->GwSpecific));
+        memcpy((uint8_t*)&crc2_rx, beacon->CRC2, sizeof(uint16_t));
+
+        // Update the GPS fields if we have a gps info descriptor and valid crc
+        if (crc2 == crc2_rx &&
+            (data.InfoDesc == GPS_FIRST_ANTENNA ||
+            data.InfoDesc == GPS_SECOND_ANTENNA ||
+            data.InfoDesc == GPS_THIRD_ANTENNA)) {
+            // Latitude and Longitude 3 bytes in length
+            memcpy(&data.Latitude, &beacon->GwSpecific[1], 3);
+            memcpy(&data.Longitude, &beacon->GwSpecific[4], 3);
+        }
+
+#endif
     }
+
 
     return LORA_OK;
 }
@@ -2229,3 +2737,4 @@ void ChannelPlan_GLOBAL::FrequencyHop(uint32_t time, uint32_t period, uint32_t d
         }
     }
 }
+

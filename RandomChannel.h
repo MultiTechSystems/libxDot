@@ -33,7 +33,8 @@ namespace lora {
              * @return bitmask of the random channel distribution state - a '1' bit indicates the channel has
              *         not been used for randomization, a '0' indicates the channel has been used for randomization.
              */
-            uint8_t ChannelState500K() const;
+
+            uint32_t ChannelState500K() const;
 
             /** Sets the bitmask state caontaing the randomly used 125K channels
              * @param bitmask of the random channel distribution state - a '1' bit indicates the channel has
@@ -45,7 +46,7 @@ namespace lora {
              * @param bitmask of the random channel distribution state - a '1' bit indicates the channel has
              *         not been used for randomization, a '0' indicates the channel has been used for randomization.
              */
-            void ChannelState500K(uint8_t mask);
+            void ChannelState500K(uint32_t mask);
 
             /** Marks all 8 channels for a subband to unused. This helper method is called
              *  typically whenever all the channels for a subband are pulled from a pool by NextChannel()
@@ -92,9 +93,13 @@ namespace lora {
             bool TakeActiveBit(uint8_t index, uint8_t *channel);
 
 
+#if CHANNEL_PLAN == CP_CN470
             static const uint8_t NUM_125K_SUBBANDS = 8;
-
+            static const uint8_t NUM_500K_SUBBANDS = 4;
+#else
+            static const uint8_t NUM_125K_SUBBANDS = 8;
             static const uint8_t NUM_500K_SUBBANDS = 1;
+#endif
 
             static const uint8_t NUM_SUBBANDS = NUM_125K_SUBBANDS + NUM_500K_SUBBANDS;
 
