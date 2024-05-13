@@ -576,6 +576,12 @@ class mDot {
         int32_t setClass(std::string newClass);
 
         /**
+         * Set the device class A, B or C without changing configuration, revert class after reset
+         *  @returns MDOT_OK if success
+         */
+        int32_t setTempClass(std::string newClass);
+
+        /**
          * Get the device class A, B or C
          *  @returns MDOT_OK if success
          */
@@ -1103,6 +1109,13 @@ class mDot {
          */
         uint32_t getRadioRandom();
 
+        int32_t getClockOffset();
+        void setClockOffset(int32_t val);
+
+        uint32_t getClockUpdated();
+        void setClockUpdated(uint32_t val);
+
+
         /**
          * Get data rate spreading factor and bandwidth
          * EU868 Datarates
@@ -1194,6 +1207,12 @@ class mDot {
         uint32_t getTimeOnAir(uint8_t bytes);
 
         /**
+         * Get time on air for last transmitted packet
+         * @returns the amount of time (in ms) it took to send bytes based on current configuration
+         */
+        uint32_t getTimeOnAir();
+
+        /**
          * Get min frequency
          * @returns minimum frequency based on current channel plan
          */
@@ -1268,15 +1287,19 @@ class mDot {
          */
         uint8_t getPingPeriodicity();
 
+
         /**
          *
-         * get/set fota enabled
+         * get/set fota mode
          *
-         * true == FOTA is on
+         * 0 = disabled
+         * 1 = enabled
+         * 4 = passthrough mode
          * set function returns MDOT_OK if success
          */
-        int32_t setFota(const bool& on);
-        bool getFota();
+
+        int32_t setFota(const uint8_t& mode);
+        uint8_t getFota();
 
         /**
          *
@@ -1447,7 +1470,7 @@ class mDot {
          * For the XDOT
          *      in sleep mode, the device can be woken up on GPIO (0-3), UART1_RX, WAKE or by the RTC alarm
          *      in deepsleep mode, the device can only be woken up using the WKUP pin (PA0, WAKE) or by the RTC alarm
-         * @returns Milliseconds slept on success
+         * @returns Milliseconds slept on success, MDOT_NOT_IDLE if device is busy with transmit/receive processing or FOTA.
          */
         int32_t sleep(const uint32_t& interval, const uint8_t& wakeup_mode = RTC_ALARM, const bool& deepsleep = true);
 
@@ -1829,6 +1852,19 @@ class mDot {
          * @return true if duty-cycle is disabled (default:false)
          */
         uint8_t getDisableDutyCycle();
+
+        /**
+         * Disable Auto Join Datarate cycle
+         * enables or disables automatic datarate cycling for device joins. TxDatarate setting will be used.
+         * @param val true to disable using automatic join datarate (default:false)
+         */
+        int32_t setDisableAutoJoinDatarate(bool val);
+
+        /**
+         * Disable Auto Join Datarate
+         * @return true if automatic join datarate is disabled (default:false)
+         */
+        uint8_t getDisableAutoJoinDatarate();
 
         /**
          * LBT RSSI

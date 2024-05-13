@@ -1184,11 +1184,22 @@ uint8_t ChannelPlan_GLOBAL::HandleJoinAccept(const uint8_t* buffer, uint8_t size
             for (int i = 13; i < size - 5; i += 2) {
                 SetChannelMask((i-13)/2, buffer[i+1] << 8 | buffer[i]);
             }
+
+            if (GetSettings()->Session.TxDatarate == GetMaxDatarate() && GetChannelMask()[4] == 0x0) {
+                GetSettings()->Session.TxDatarate = GetMaxDatarate() - 1;
+            }
         } else {
+            uint8_t fsb = 0;
+
+            if (_txChannel < 64)
+                fsb = (_txChannel / 8);
+            else
+                fsb = (_txChannel % 8);
+
             // Reset state of random channels to enable the last used FSB for the first tx to confirm network settings
             _randomChannel.ChannelState125K(0);
-            _randomChannel.MarkAllSubbandChannelsUnused(_txFrequencySubBand-1);
-            _randomChannel.ChannelState500K(1 << (_txFrequencySubBand - 1));
+            _randomChannel.MarkAllSubbandChannelsUnused(fsb);
+            _randomChannel.ChannelState500K(1 << fsb);
             EnableDefaultChannels();
         }
     } else if (IsPlanDynamic() && size > 17 && buffer[28] == 0x00) {
@@ -2221,6 +2232,10 @@ uint8_t ChannelPlan_GLOBAL::GetNextChannel()
         return LORA_OK;
     }
 
+    if (IsPlanFixed() && GetSettings()->Session.TxDatarate == GetMaxDatarate() && GetChannelMask()[4] == 0x0) {
+        GetSettings()->Session.TxDatarate = GetMaxDatarate() - 1;
+    }
+
     uint8_t start = 0;
     uint8_t maxChannels = _numChans125k;
     uint8_t nbEnabledChannels = 0;
@@ -2341,13 +2356,19 @@ uint8_t lora::ChannelPlan_GLOBAL::GetJoinDatarate() {
             fsb = (GetSettings()->Network.DevNonce % 9);
         }
 
+        if (GetSettings()->Network.FrequencySubBand == 0) {
+            if (fsb < 9) {
+                SetFrequencySubBand(fsb);
+            } else {
+                SetFrequencySubBand(dr4_fsb);
+            }
+        }
+
         if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
             if (GetSettings()->Network.FrequencySubBand == 0) {
                 if (fsb < 9) {
-                    SetFrequencySubBand(fsb);
                     dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
                 } else {
-                    SetFrequencySubBand(dr4_fsb);
                     dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
                 }
             } else if (altdr && CountBits(_channelMask[4] > 0)) {
@@ -2407,10 +2428,7 @@ uint8_t ChannelPlan_GLOBAL::HandleMacCommand(uint8_t* payload, uint8_t& index) {
                 else
                     GetSettings()->Session.Max_EIRP = AS923_MAX_ERP_VALUES[(eirp_dwell & 0x0F)];
 
-
-                if (GetSettings()->Session.TxPower > GetSettings()->Session.Max_EIRP) {
-                    GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP;
-                }
+                GetSettings()->Session.TxPower = GetSettings()->Session.Max_EIRP;
 
                 logDebug("buffer index %d", GetSettings()->Session.CommandBufferIndex);
                 if (GetSettings()->Session.CommandBufferIndex < std::min<int>(GetMaxPayloadSize(), COMMANDS_BUFFER_SIZE)) {

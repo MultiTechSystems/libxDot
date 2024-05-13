@@ -161,11 +161,23 @@ uint8_t ChannelPlan_US915::HandleJoinAccept(const uint8_t* buffer, uint8_t size)
         for (int i = 13; i < size - 5; i += 2) {
             SetChannelMask((i-13)/2, buffer[i+1] << 8 | buffer[i]);
         }
+
+        if (GetSettings()->Session.TxDatarate == GetMaxDatarate() && GetChannelMask()[4] == 0x0) {
+            GetSettings()->Session.TxDatarate = GetMaxDatarate() - 1;
+        }
     } else {
+
+        uint8_t fsb = 0;
+
+        if (_txChannel < 64)
+            fsb = (_txChannel / 8);
+        else
+            fsb = (_txChannel % 8);
+
         // Reset state of random channels to enable the last used FSB for the first tx to confirm network settings
         _randomChannel.ChannelState125K(0);
-        _randomChannel.MarkAllSubbandChannelsUnused(_txFrequencySubBand-1);
-        _randomChannel.ChannelState500K(1 << (_txFrequencySubBand - 1));
+        _randomChannel.MarkAllSubbandChannelsUnused(fsb);
+        _randomChannel.ChannelState500K(1 << fsb);
         EnableDefaultChannels();
     }
 
@@ -817,6 +829,10 @@ uint8_t ChannelPlan_US915::GetNextChannel()
         return LORA_OK;
     }
 
+    if (GetSettings()->Session.TxDatarate == GetMaxDatarate() && GetChannelMask()[4] == 0x0) {
+        GetSettings()->Session.TxDatarate = GetMaxDatarate() - 1;
+    }
+
     uint8_t start = 0;
     uint8_t maxChannels = _numChans125k;
     uint8_t nbEnabledChannels = 0;
@@ -921,38 +937,43 @@ uint8_t ChannelPlan_US915::GetNextChannel()
 uint8_t lora::ChannelPlan_US915::GetJoinDatarate() {
     uint8_t dr = GetSettings()->Session.TxDatarate;
 
-    if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
-        uint8_t fsb = 1;
-        uint8_t dr4_fsb = 1;
-        bool altdr = false;
+    uint8_t fsb = 1;
+    uint8_t dr4_fsb = 1;
+    bool altdr = false;
 
-        altdr = (GetSettings()->Network.DevNonce % 2) == 0;
+    altdr = (GetSettings()->Network.DevNonce % 2) == 0;
 
-        if ((GetSettings()->Network.DevNonce % 9) == 0) {
-            // set DR4 fsb to 1-8 incrementing every 9th join
-            dr4_fsb = ((GetSettings()->Network.DevNonce / 9) % 8) + 1;
-            fsb = 9;
+    if ((GetSettings()->Network.DevNonce % 9) == 0) {
+        // set DR4 fsb to 1-8 incrementing every 9th join
+        dr4_fsb = ((GetSettings()->Network.DevNonce / 9) % 8) + 1;
+        fsb = 9;
+    } else {
+        fsb = (GetSettings()->Network.DevNonce % 9);
+    }
+
+    if (GetSettings()->Network.FrequencySubBand == 0) {
+        if (fsb < 9) {
+            SetFrequencySubBand(fsb);
         } else {
-            fsb = (GetSettings()->Network.DevNonce % 9);
-        }
-
-        if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
-            if (GetSettings()->Network.FrequencySubBand == 0) {
-                if (fsb < 9) {
-                    SetFrequencySubBand(fsb);
-                    dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
-                } else {
-                    SetFrequencySubBand(dr4_fsb);
-                    dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
-                }
-            } else if (altdr && CountBits(_channelMask[4] > 0)) {
-                dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
-            } else {
-                dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
-            }
-            altdr = !altdr;
+            SetFrequencySubBand(dr4_fsb);
         }
     }
+
+    if (GetSettings()->Test.DisableRandomJoinDatarate == lora::OFF) {
+        if (GetSettings()->Network.FrequencySubBand == 0) {
+            if (fsb < 9) {
+                dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
+            } else {
+                dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
+            }
+        } else if (altdr && CountBits(_channelMask[4] > 0)) {
+            dr = (_plan == US915 ? lora::DR_4 : lora::DR_6); // US or AU
+        } else {
+            dr = (_plan == US915 ? lora::DR_0 : lora::DR_2); // US or AU
+        }
+        altdr = !altdr;
+    }
+    
 
     return dr;
 }
